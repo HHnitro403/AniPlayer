@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="Aniplayer.Core/Aniplayer.Core.csproj" />
+  <Project Path="AniPlayer.UI/AniPlayer.UI.csproj" />
+</Solution>

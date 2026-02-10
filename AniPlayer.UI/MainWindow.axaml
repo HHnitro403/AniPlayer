@@ -1,0 +1,41 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="700"
+        x:Class="AniPlayer.UI.MainWindow"
+        Title="AniPlayer LibMpv POC"
+        Width="1000" Height="700">
+
+    <DockPanel>
+        <!-- Top Bar -->
+        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="10">
+            <Button x:Name="OpenFileButton" Content="Open File" Click="OpenFileButton_Click" Padding="10,5"/>
+        </StackPanel>
+
+        <!-- Bottom Bar -->
+        <StackPanel DockPanel.Dock="Bottom" Margin="10" Spacing="10">
+            <!-- Audio Track Buttons -->
+            <StackPanel Orientation="Horizontal" Spacing="5">
+                <TextBlock Text="Audio:" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                <WrapPanel x:Name="AudioTracksPanel" />
+            </StackPanel>
+
+            <!-- Status Line -->
+            <StackPanel Orientation="Horizontal" Spacing="20">
+                <TextBlock x:Name="StatusText" Text="Status: Stopped"/>
+                <TextBlock x:Name="LockText" Text="Lock: Not held"/>
+            </StackPanel>
+        </StackPanel>
+
+        <!-- Video Area (POC Note: mpv renders in separate window for now) -->
+        <Border Background="Black">
+            <TextBlock Text="POC: Video plays in separate mpv window&#x0a;Audio track switching and file locking verified below"
+                       Foreground="White"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Center"
+                       TextAlignment="Center"
+                       x:Name="PlaceholderText"/>
+        </Border>
+    </DockPanel>
+</Window>
