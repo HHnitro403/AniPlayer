@@ -13,7 +13,9 @@ public static class EpisodeTypes
 
     private static readonly HashSet<string> KnownSubfolders = new(StringComparer.OrdinalIgnoreCase)
     {
-        Special, Ova, Oad, Ncop, Nced, "Specials", "OVAs", "OADs"
+        Special, Ova, Oad, Ncop, Nced,
+        "Specials", "OVAs", "OADs",
+        "Extra", "Extras",
     };
 
     // Patterns that appear at the end of folder names like "Show S1 - OVA"
@@ -24,6 +26,17 @@ public static class EpisodeTypes
         (new Regex(@"\b(?:OADs?)\s*$", RegexOptions.IgnoreCase | RegexOptions.Compiled), Oad),
         (new Regex(@"\b(?:NCOP)\s*$", RegexOptions.IgnoreCase | RegexOptions.Compiled), Ncop),
         (new Regex(@"\b(?:NCED)\s*$", RegexOptions.IgnoreCase | RegexOptions.Compiled), Nced),
+        (new Regex(@"\b(?:Extras?)\s*$", RegexOptions.IgnoreCase | RegexOptions.Compiled), Special),
+    };
+
+    // Patterns for detecting type from individual filenames
+    private static readonly (Regex pattern, string type)[] FileNamePatterns =
+    {
+        (new Regex(@"\bNCED\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), Nced),
+        (new Regex(@"\bNCOP\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), Ncop),
+        (new Regex(@"\bOVA\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), Ova),
+        (new Regex(@"\bOAD\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), Oad),
+        (new Regex(@"\b(?:Special|SP)\s*\d", RegexOptions.IgnoreCase | RegexOptions.Compiled), Special),
     };
 
     /// <summary>
@@ -38,7 +51,6 @@ public static class EpisodeTypes
         // Exact match first (fast path)
         if (KnownSubfolders.Contains(folderName))
         {
-            // Map to canonical type
             if (folderName.StartsWith("Special", StringComparison.OrdinalIgnoreCase))
                 return Special;
             if (folderName.StartsWith("OVA", StringComparison.OrdinalIgnoreCase))
@@ -49,6 +61,8 @@ public static class EpisodeTypes
                 return Ncop;
             if (folderName.Equals(Nced, StringComparison.OrdinalIgnoreCase))
                 return Nced;
+            if (folderName.StartsWith("Extra", StringComparison.OrdinalIgnoreCase))
+                return Special;
         }
 
         // Suffix match: "Show S1 - OVA", "Show - Specials", etc.
@@ -62,8 +76,26 @@ public static class EpisodeTypes
     }
 
     /// <summary>
-    /// Returns true if the folder name is an exact known subfolder like "OVA", "Specials", "NCED",
-    /// OR if it ends with a known type suffix like "Show S1 - OVA".
+    /// Detect episode type from individual filename. Used for files in
+    /// mixed folders like "Extra" where each file may have a different type.
+    /// Returns null if no type keyword found in filename.
+    /// </summary>
+    public static string? FromFileName(string fileName)
+    {
+        if (string.IsNullOrEmpty(fileName))
+            return null;
+
+        foreach (var (pattern, type) in FileNamePatterns)
+        {
+            if (pattern.IsMatch(fileName))
+                return type;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Returns true if the folder name indicates a non-EPISODE type.
     /// </summary>
     public static bool IsKnownSubfolder(string folderName)
     {

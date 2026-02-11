@@ -154,9 +154,12 @@ public class ScannerService : IScannerService
             var episodeNumber = EpisodeParser.ParseEpisodeNumber(file);
             var title = EpisodeParser.ParseTitle(file);
 
-            Report($"    PARSED: ep={episodeNumber?.ToString() ?? "null"}, title='{title ?? "null"}'");
+            // Try to detect type from filename (e.g. "Nced-1.mkv" in an Extra folder)
+            // If the filename contains a type keyword, use that instead of folder type
+            var fileType = EpisodeTypes.FromFileName(fileName) ?? episodeType;
+            Report($"    PARSED: ep={episodeNumber?.ToString() ?? "null"}, title='{title ?? "null"}', type={fileType}");
 
-            var epId = await _library.UpsertEpisodeAsync(seriesId, file, title, episodeNumber, episodeType);
+            var epId = await _library.UpsertEpisodeAsync(seriesId, file, title, episodeNumber, fileType);
             Report($"    UPSERTED episode ID={epId} for seriesId={seriesId}");
             count++;
         }

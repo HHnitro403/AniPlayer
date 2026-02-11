@@ -36,6 +36,22 @@ public partial class PlayerPage : UserControl
             await Task.Delay(500);
             InitializeMpv();
         }
+        else if (_mpvHandle != IntPtr.Zero)
+        {
+            // MPV already created but renderer was disposed when we navigated away.
+            // Re-attach the renderer to the new native control.
+            Logger.Log("PlayerPage re-attached — re-initializing renderer for new native handle");
+            await Task.Delay(500);
+            if (VideoHostControl.NativeHandle != IntPtr.Zero)
+            {
+                VideoHostControl.InitializeRenderer(_mpvHandle);
+                Logger.Log($"Renderer re-initialized: {VideoHostControl.Renderer?.IsInitialized ?? false}");
+            }
+            else
+            {
+                Logger.Log("WARNING: NativeHandle still zero after delay, renderer not re-initialized");
+            }
+        }
     }
 
     // ── MPV init (moved from MainWindow) ─────────────────────
