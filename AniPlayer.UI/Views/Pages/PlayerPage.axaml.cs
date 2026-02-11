@@ -17,6 +17,7 @@ public partial class PlayerPage : UserControl
     private FileStream? _lockStream;
     private string? _currentFile;
     private bool _mpvInitialized;
+    private TaskCompletionSource? _mpvReady;
 
     public event Action? PlaybackStopped;
 
@@ -24,30 +25,16 @@ public partial class PlayerPage : UserControl
     {
         InitializeComponent();
         AttachedToVisualTree += OnAttachedToVisualTree;
-        DetachedFromVisualTree += OnDetachedFromVisualTree;
     }
 
     private async void OnAttachedToVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
     {
         if (!_mpvInitialized)
         {
+            _mpvReady = new TaskCompletionSource();
             Logger.Log("PlayerPage attached — waiting for render, then initializing MPV");
             await Task.Delay(500);
             InitializeMpv();
-        }
-    }
-
-    private async void OnDetachedFromVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
-    {
-        Logger.Log("PlayerPage detached — cleaning up");
-        await CleanupCurrentFileAsync();
-        VideoHostControl.Renderer?.Dispose();
-
-        if (_mpvHandle != IntPtr.Zero)
-        {
-            LibMpvInterop.mpv_terminate_destroy(_mpvHandle);
-            _mpvHandle = IntPtr.Zero;
-            _mpvInitialized = false;
         }
     }
 
@@ -107,11 +94,13 @@ public partial class PlayerPage : UserControl
             _mpvInitialized = true;
             StatusText.Text = "Ready";
             Logger.Log("=== InitializeMpv END (SUCCESS) ===");
+            _mpvReady?.TrySetResult();
         }
         catch (Exception ex)
         {
             Logger.LogError("InitializeMpv exception", ex);
             StatusText.Text = $"Error — {ex.Message}";
+            _mpvReady?.TrySetResult();
         }
     }
 
@@ -129,6 +118,13 @@ public partial class PlayerPage : UserControl
     public async Task LoadFileAsync(string filePath)
     {
         Logger.Log($"=== LoadFileAsync: {filePath} ===");
+
+        // Wait for MPV init if it's still in progress
+        if (!_mpvInitialized && _mpvReady != null)
+        {
+            Logger.Log("Waiting for MPV initialization to complete...");
+            await _mpvReady.Task;
+        }
 
         if (!_mpvInitialized || _mpvHandle == IntPtr.Zero)
         {
