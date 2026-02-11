@@ -31,28 +31,41 @@ public class ScannerService : IScannerService
     public async Task ScanLibraryAsync(int libraryId, CancellationToken ct = default)
     {
         var lib = await _library.GetLibraryByIdAsync(libraryId);
-        if (lib == null || !Directory.Exists(lib.Path))
+        if (lib == null)
         {
-            _logger.LogWarning("Library {LibraryId} not found or path missing", libraryId);
+            Report($"ERROR: Library ID {libraryId} not found in database");
+            return;
+        }
+        if (!Directory.Exists(lib.Path))
+        {
+            Report($"ERROR: Library path does not exist: {lib.Path}");
             return;
         }
 
-        Report($"Scanning library: {lib.Label ?? lib.Path}");
-        _logger.LogInformation("Scanning library {Id} at {Path}", lib.Id, lib.Path);
+        Report($"Scanning library: {lib.Label ?? lib.Path} (ID: {lib.Id})");
+        Report($"Library path: {lib.Path}");
 
         // Each top-level subfolder in the library path is a series
         var topDirs = Directory.GetDirectories(lib.Path);
+        Report($"Found {topDirs.Length} top-level folders");
+
+        var seriesCount = 0;
         foreach (var seriesDir in topDirs)
         {
             ct.ThrowIfCancellationRequested();
             var folderName = Path.GetFileName(seriesDir);
 
-            // Skip known episode-type subfolders at the library root level
             if (EpisodeTypes.IsKnownSubfolder(folderName))
+            {
+                Report($"Skipping known subfolder at library root: {folderName}");
                 continue;
+            }
 
+            seriesCount++;
             await ScanSeriesDirectoryAsync(libraryId, seriesDir, folderName, ct);
         }
+
+        Report($"Scanned {seriesCount} series folders");
 
         // Handle loose video files at the library root (treated as an "Unsorted" series)
         await ScanLooseFilesAsync(libraryId, lib.Path, ct);
@@ -60,52 +73,64 @@ public class ScannerService : IScannerService
         // Prune episodes whose files no longer exist
         await PruneDeletedEpisodesAsync(libraryId, ct);
 
-        Report("Scan complete.");
-        _logger.LogInformation("Scan complete for library {Id}", lib.Id);
+        Report($"Scan complete for library {lib.Id}");
     }
 
     private async Task ScanSeriesDirectoryAsync(int libraryId, string seriesDir,
         string folderName, CancellationToken ct)
     {
-        Report($"Scanning series: {folderName}");
+        Report($"Scanning series: {folderName} ({seriesDir})");
 
         var seriesId = await _library.UpsertSeriesAsync(libraryId, folderName, seriesDir);
+        Report($"  Series upserted — ID: {seriesId}, folder: {folderName}");
 
         // Scan video files directly in the series folder (regular episodes)
-        await ScanEpisodesInFolderAsync(seriesId, seriesDir, EpisodeTypes.Episode, ct);
+        var epCount = await ScanEpisodesInFolderAsync(seriesId, seriesDir, EpisodeTypes.Episode, ct);
+        Report($"  Found {epCount} episode(s) in root folder");
 
         // Scan known subfolders (Specials, OVA, etc.)
-        foreach (var subDir in Directory.GetDirectories(seriesDir))
+        var subDirs = Directory.GetDirectories(seriesDir);
+        if (subDirs.Length > 0)
+            Report($"  Found {subDirs.Length} subfolder(s) in series");
+
+        foreach (var subDir in subDirs)
         {
             ct.ThrowIfCancellationRequested();
             var subFolderName = Path.GetFileName(subDir);
             if (EpisodeTypes.IsKnownSubfolder(subFolderName))
             {
                 var episodeType = EpisodeTypes.FromFolderName(subFolderName);
-                await ScanEpisodesInFolderAsync(seriesId, subDir, episodeType, ct);
+                var subCount = await ScanEpisodesInFolderAsync(seriesId, subDir, episodeType, ct);
+                Report($"  Found {subCount} {episodeType} episode(s) in {subFolderName}/");
             }
             else
             {
-                // Treat unknown subfolders as containing regular episodes
-                await ScanEpisodesInFolderAsync(seriesId, subDir, EpisodeTypes.Episode, ct);
+                var subCount = await ScanEpisodesInFolderAsync(seriesId, subDir, EpisodeTypes.Episode, ct);
+                Report($"  Found {subCount} episode(s) in subfolder {subFolderName}/");
             }
         }
     }
 
-    private async Task ScanEpisodesInFolderAsync(int seriesId, string folder,
+    private async Task<int> ScanEpisodesInFolderAsync(int seriesId, string folder,
         string episodeType, CancellationToken ct)
     {
+        var count = 0;
         foreach (var file in Directory.EnumerateFiles(folder))
         {
             ct.ThrowIfCancellationRequested();
             if (!FileHelper.IsSupportedVideo(file))
                 continue;
 
+            var fileName = Path.GetFileName(file);
             var episodeNumber = EpisodeParser.ParseEpisodeNumber(file);
             var title = EpisodeParser.ParseTitle(file);
 
+            Report($"    Episode: {fileName} → ep={episodeNumber?.ToString() ?? "?"}, type={episodeType}, title={title ?? "(none)"}");
+
             await _library.UpsertEpisodeAsync(seriesId, file, title, episodeNumber, episodeType);
+            count++;
         }
+        return count;
     }
 
     private async Task ScanLooseFilesAsync(int libraryId, string libraryPath, CancellationToken ct)
@@ -115,23 +140,33 @@ public class ScannerService : IScannerService
             .ToList();
 
         if (looseFiles.Count == 0)
+        {
+            Report("No loose video files at library root");
             return;
+        }
 
-        Report("Scanning loose files...");
+        Report($"Found {looseFiles.Count} loose video file(s) at library root");
         var seriesId = await _library.UpsertSeriesAsync(libraryId, "Unsorted", libraryPath);
+        Report($"Unsorted series upserted — ID: {seriesId}");
 
         foreach (var file in looseFiles)
         {
             ct.ThrowIfCancellationRequested();
+            var fileName = Path.GetFileName(file);
             var episodeNumber = EpisodeParser.ParseEpisodeNumber(file);
             var title = EpisodeParser.ParseTitle(file);
+            Report($"  Loose file: {fileName} → ep={episodeNumber?.ToString() ?? "?"}, title={title ?? "(none)"}");
             await _library.UpsertEpisodeAsync(seriesId, file, title, episodeNumber, EpisodeTypes.Episode);
         }
     }
 
     private async Task PruneDeletedEpisodesAsync(int libraryId, CancellationToken ct)
     {
+        Report("Pruning deleted files...");
         var allSeries = await _library.GetSeriesByLibraryIdAsync(libraryId);
+        var prunedEpisodes = 0;
+        var prunedSeries = 0;
+
         foreach (var series in allSeries)
         {
             ct.ThrowIfCancellationRequested();
@@ -140,18 +175,21 @@ public class ScannerService : IScannerService
             {
                 if (!File.Exists(ep.FilePath))
                 {
-                    _logger.LogInformation("Pruning missing episode: {FilePath}", ep.FilePath);
+                    Report($"  Pruning missing episode: {Path.GetFileName(ep.FilePath)}");
                     await _library.DeleteEpisodeAsync(ep.Id);
+                    prunedEpisodes++;
                 }
             }
 
-            // If series directory is gone, remove the series too
             if (!Directory.Exists(series.Path))
             {
-                _logger.LogInformation("Pruning missing series: {Path}", series.Path);
+                Report($"  Pruning missing series: {series.FolderName}");
                 await _library.DeleteSeriesAsync(series.Id);
+                prunedSeries++;
             }
         }
+
+        Report($"Pruning done: removed {prunedEpisodes} episode(s), {prunedSeries} series");
     }
 
     private void Report(string message) => ScanProgress?.Invoke(message);

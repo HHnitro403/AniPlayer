@@ -92,7 +92,11 @@ namespace AniPlayer.UI
                 _showInfoPage.LoadSeries(id);
                 NavigateTo("ShowInfo");
             };
-            _libraryPage.FolderAdded += path => _ = AddLibraryAsync(path);
+            _libraryPage.FolderAdded += path =>
+            {
+                Logger.Log($"[MainWindow] LibraryPage.FolderAdded event received: {path}");
+                _ = AddLibraryAsync(path, "LibraryPage");
+            };
 
             // ShowInfoPage
             _showInfoPage.BackRequested += () => NavigateTo("Library");
@@ -101,40 +105,67 @@ namespace AniPlayer.UI
             _playerPage.PlaybackStopped += () => NavigateTo("Home");
 
             // OptionsPage
-            _optionsPage.LibraryFolderAdded += path => _ = AddLibraryAsync(path);
+            _optionsPage.LibraryFolderAdded += path =>
+            {
+                Logger.Log($"[MainWindow] OptionsPage.LibraryFolderAdded event received: {path}");
+                _ = AddLibraryAsync(path, "OptionsPage");
+            };
+
+            // ScannerService — pipe scan progress into debug.log
+            _scannerService.ScanProgress += msg => Logger.Log($"[Scanner] {msg}");
 
             // FolderWatcher — re-scan when files change on disk
             _folderWatcher.LibraryChanged += libraryId =>
             {
-                Logger.Log($"FolderWatcher: library {libraryId} changed, re-scanning");
+                Logger.Log($"[FolderWatcher] Library {libraryId} changed on disk, triggering re-scan");
                 _ = _scannerService.ScanLibraryAsync(libraryId);
             };
         }
 
         // ── Add Library (shared by LibraryPage + OptionsPage) ────
 
-        private async Task AddLibraryAsync(string path)
+        private async Task AddLibraryAsync(string path, string source)
         {
+            Logger.Log($"[AddLibrary] === START (source: {source}) ===");
+            Logger.Log($"[AddLibrary] Path: {path}");
+
+            // Validate path
+            var exists = System.IO.Directory.Exists(path);
+            Logger.Log($"[AddLibrary] Directory exists: {exists}");
+            if (!exists)
+            {
+                Logger.Log($"[AddLibrary] ERROR: Directory does not exist, aborting");
+                return;
+            }
+
             try
             {
-                Logger.Log($"Adding library: {path}");
-
-                // Use folder name as the label
+                // Step 1: Insert into database
                 var label = System.IO.Path.GetFileName(path);
+                Logger.Log($"[AddLibrary] Step 1: Inserting into DB — path='{path}', label='{label}'");
                 var libraryId = await _libraryService.AddLibraryAsync(path, label);
-                Logger.Log($"Library added with ID {libraryId}");
+                Logger.Log($"[AddLibrary] Step 1 DONE: Library inserted with ID {libraryId}");
 
-                // Scan the newly added library for series + episodes
+                // Step 2: Scan for series + episodes
+                Logger.Log($"[AddLibrary] Step 2: Scanning library {libraryId} for series and episodes...");
                 await _scannerService.ScanLibraryAsync(libraryId);
-                Logger.Log($"Library {libraryId} scanned successfully");
+                Logger.Log($"[AddLibrary] Step 2 DONE: Scan complete for library {libraryId}");
 
-                // Start watching for file changes
+                // Step 3: Start folder watcher
+                Logger.Log($"[AddLibrary] Step 3: Starting folder watcher for library {libraryId}");
                 _folderWatcher.WatchLibrary(libraryId, path);
-                Logger.Log($"Now watching library {libraryId}");
+                Logger.Log($"[AddLibrary] Step 3 DONE: Now watching library {libraryId}");
+
+                Logger.Log($"[AddLibrary] === SUCCESS (library {libraryId}) ===");
             }
             catch (Exception ex)
             {
-                Logger.Log($"Failed to add library '{path}': {ex.Message}");
+                Logger.Log($"[AddLibrary] === FAILED ===");
+                Logger.Log($"[AddLibrary] Exception type: {ex.GetType().Name}");
+                Logger.Log($"[AddLibrary] Message: {ex.Message}");
+                Logger.Log($"[AddLibrary] StackTrace: {ex.StackTrace}");
+                if (ex.InnerException != null)
+                    Logger.Log($"[AddLibrary] InnerException: {ex.InnerException.Message}");
             }
         }
 

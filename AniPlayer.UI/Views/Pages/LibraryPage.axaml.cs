@@ -17,8 +17,13 @@ public partial class LibraryPage : UserControl
 
     private async void AddFolderButton_Click(object? sender, RoutedEventArgs e)
     {
+        Logger.Log("[LibraryPage] Add Folder button clicked — opening folder picker");
         var topLevel = TopLevel.GetTopLevel(this);
-        if (topLevel == null) return;
+        if (topLevel == null)
+        {
+            Logger.Log("[LibraryPage] ERROR: TopLevel is null, cannot open folder picker");
+            return;
+        }
 
         var folders = await topLevel.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
         {
@@ -28,7 +33,14 @@ public partial class LibraryPage : UserControl
 
         if (folders.Count > 0)
         {
-            FolderAdded?.Invoke(folders[0].Path.LocalPath);
+            var path = folders[0].Path.LocalPath;
+            Logger.Log($"[LibraryPage] Folder selected: {path}");
+            Logger.Log($"[LibraryPage] FolderAdded event has {(FolderAdded != null ? "subscribers" : "NO subscribers")} — invoking");
+            FolderAdded?.Invoke(path);
+        }
+        else
+        {
+            Logger.Log("[LibraryPage] Folder picker cancelled by user");
         }
     }
 }
