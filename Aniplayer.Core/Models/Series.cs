@@ -1,3 +1,5 @@
+using System.Text.RegularExpressions;
+
 namespace Aniplayer.Core.Models;
 
 public class Series
@@ -23,5 +25,30 @@ public class Series
     public List<Episode>? Episodes { get; set; }
 
     public string DisplayTitle =>
-        TitleEnglish ?? TitleRomaji ?? FolderName;
+        TitleEnglish ?? TitleRomaji ?? CleanFolderName(FolderName);
+
+    /// <summary>
+    /// Strips release group tags [Group], trailing bracket tags [quality][hash],
+    /// and common metadata suffixes from folder names for display.
+    /// "[Judas] High School DxD (Seasons 1-4 + OVAs + Specials)" → "High School DxD"
+    /// "[Anime Time] Kenja no Mago (Wise Man's Grandchild) [Dual Audio]" → "Kenja no Mago (Wise Man's Grandchild)"
+    /// </summary>
+    private static string CleanFolderName(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return name;
+
+        // Strip leading [group] tags
+        var cleaned = Regex.Replace(name, @"^\[.*?\]\s*", "");
+
+        // Strip trailing [tag] blocks (quality, hash, codec, etc.)
+        cleaned = Regex.Replace(cleaned, @"(\s*\[.*?\])+\s*$", "");
+
+        // Strip common metadata parenthetical suffixes at end:
+        // (Seasons 1-4 + OVAs + Specials), (Season 1), (S1-S4), (Complete), (Batch)
+        cleaned = Regex.Replace(cleaned, @"\s*\((?:Seasons?\s|S\d|Complete|Batch|Dual\s?Audio|Multi\s?Subs?).*\)\s*$",
+            "", RegexOptions.IgnoreCase);
+
+        return cleaned.Trim();
+    }
 }

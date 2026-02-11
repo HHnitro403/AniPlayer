@@ -117,17 +117,12 @@ public class ScannerService : IScannerService
         {
             ct.ThrowIfCancellationRequested();
             var subFolderName = Path.GetFileName(subDir);
-            if (EpisodeTypes.IsKnownSubfolder(subFolderName))
-            {
-                var episodeType = EpisodeTypes.FromFolderName(subFolderName);
-                var subCount = await ScanEpisodesInFolderAsync(seriesId, subDir, episodeType, ct);
-                Report($"  Found {subCount} {episodeType} episode(s) in {subFolderName}/");
-            }
-            else
-            {
-                var subCount = await ScanEpisodesInFolderAsync(seriesId, subDir, EpisodeTypes.Episode, ct);
-                Report($"  Found {subCount} episode(s) in subfolder {subFolderName}/");
-            }
+
+            // Detect episode type from folder name — handles both exact ("OVA")
+            // and suffixed ("High School DxD S1 - OVA") folder names
+            var episodeType = EpisodeTypes.FromFolderName(subFolderName);
+            var subCount = await ScanEpisodesInFolderAsync(seriesId, subDir, episodeType, ct);
+            Report($"  Found {subCount} {episodeType} episode(s) in {subFolderName}/");
         }
     }
 

@@ -97,7 +97,7 @@ public static class Queries
                duration_seconds AS DurationSeconds, thumbnail_path AS ThumbnailPath,
                anilist_ep_id AS AnilistEpId, created_at AS CreatedAt
         FROM Episodes WHERE series_id = @seriesId
-        ORDER BY episode_type, episode_number, file_path";
+        ORDER BY file_path, episode_number";
 
     public const string GetEpisodeById = @"
         SELECT id AS Id, series_id AS SeriesId, file_path AS FilePath, title AS Title,
