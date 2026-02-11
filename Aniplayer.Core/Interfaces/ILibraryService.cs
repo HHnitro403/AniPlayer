@@ -1,5 +1,31 @@
+using Aniplayer.Core.Models;
+
 namespace Aniplayer.Core.Interfaces;
 
 public interface ILibraryService
 {
+    // Libraries
+    Task<IEnumerable<Library>> GetAllLibrariesAsync();
+    Task<Library?> GetLibraryByIdAsync(int id);
+    Task<int> AddLibraryAsync(string path, string? label = null);
+    Task DeleteLibraryAsync(int id);
+
+    // Series
+    Task<IEnumerable<Series>> GetAllSeriesAsync();
+    Task<IEnumerable<Series>> GetSeriesByLibraryIdAsync(int libraryId);
+    Task<Series?> GetSeriesByIdAsync(int id);
+    Task<Series?> GetSeriesByPathAsync(string path);
+    Task<IEnumerable<Series>> GetRecentlyAddedSeriesAsync(int days);
+    Task<int> UpsertSeriesAsync(int libraryId, string folderName, string path);
+    Task UpdateSeriesMetadataAsync(Series series);
+    Task DeleteSeriesAsync(int id);
+
+    // Episodes
+    Task<IEnumerable<Episode>> GetEpisodesBySeriesIdAsync(int seriesId);
+    Task<Episode?> GetEpisodeByIdAsync(int id);
+    Task<Episode?> GetEpisodeByFilePathAsync(string filePath);
+    Task<int> UpsertEpisodeAsync(int seriesId, string filePath, string? title,
+        double? episodeNumber, string episodeType);
+    Task DeleteEpisodeAsync(int id);
+    Task<IEnumerable<string>> GetEpisodeFilePathsBySeriesIdAsync(int seriesId);
 }
