@@ -90,8 +90,8 @@ namespace AniPlayer.UI
             // LibraryPage
             _libraryPage.SeriesSelected += id =>
             {
-                _showInfoPage.LoadSeries(id);
-                NavigateTo("ShowInfo");
+                Logger.Log($"[MainWindow] SeriesSelected: ID={id}");
+                _ = OpenSeriesAsync(id);
             };
             _libraryPage.FolderAdded += path =>
             {
@@ -101,6 +101,11 @@ namespace AniPlayer.UI
 
             // ShowInfoPage
             _showInfoPage.BackRequested += () => NavigateTo("Library");
+            _showInfoPage.EpisodePlayRequested += filePath =>
+            {
+                Logger.Log($"[MainWindow] EpisodePlayRequested: {filePath}");
+                PlayFile(filePath);
+            };
 
             // PlayerPage
             _playerPage.PlaybackStopped += () => NavigateTo("Home");
@@ -207,6 +212,30 @@ namespace AniPlayer.UI
             catch (Exception ex)
             {
                 Logger.Log($"[RemoveLibrary] Failed: {ex.Message}");
+            }
+        }
+
+        private async Task OpenSeriesAsync(int seriesId)
+        {
+            try
+            {
+                Logger.Log($"[OpenSeries] Loading series {seriesId}...");
+                var series = await _libraryService.GetSeriesByIdAsync(seriesId);
+                if (series == null)
+                {
+                    Logger.Log($"[OpenSeries] ERROR: Series {seriesId} not found in DB");
+                    return;
+                }
+
+                var episodes = (await _libraryService.GetEpisodesBySeriesIdAsync(seriesId)).ToList();
+                Logger.Log($"[OpenSeries] Loaded series '{series.DisplayTitle}' with {episodes.Count} episode(s)");
+
+                _showInfoPage.LoadSeriesData(series, episodes);
+                NavigateTo("ShowInfo");
+            }
+            catch (Exception ex)
+            {
+                Logger.Log($"[OpenSeries] Failed: {ex.Message}");
             }
         }
 
