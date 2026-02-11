@@ -17,7 +17,7 @@ public static class EpisodeParser
 
         try
         {
-            return AnitomySharp.AnitomySharp.Parse(fileName);
+            return (List<Element>)AnitomySharp.AnitomySharp.Parse(fileName);
         }
         catch
         {
