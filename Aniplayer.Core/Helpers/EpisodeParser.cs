@@ -5,6 +5,11 @@ namespace Aniplayer.Core.Helpers;
 
 public static class EpisodeParser
 {
+    // Set to true to enable verbose parse logging (piped through ScanProgress)
+    public static Action<string>? LogCallback;
+
+    private static void Log(string msg) => LogCallback?.Invoke(msg);
+
     /// <summary>
     /// Parses anime filename metadata using AnitomySharp.
     /// Returns all parsed elements for a given filename.
@@ -13,14 +18,22 @@ public static class EpisodeParser
     {
         var fileName = Path.GetFileName(filePath);
         if (string.IsNullOrEmpty(fileName))
+        {
+            Log($"[Parser] ParseAll: empty filename for path '{filePath}'");
             return new List<Element>();
+        }
 
         try
         {
-            return (List<Element>)AnitomySharp.AnitomySharp.Parse(fileName);
+            var results = (List<Element>)AnitomySharp.AnitomySharp.Parse(fileName);
+            Log($"[Parser] AnitomySharp parsed '{fileName}' → {results.Count} elements:");
+            foreach (var el in results)
+                Log($"[Parser]   {el.Category} = '{el.Value}'");
+            return results;
         }
-        catch
+        catch (Exception ex)
         {
+            Log($"[Parser] AnitomySharp EXCEPTION for '{fileName}': {ex.Message}");
             return new List<Element>();
         }
     }
@@ -32,10 +45,15 @@ public static class EpisodeParser
             e => e.Category == Element.ElementCategory.ElementEpisodeNumber);
 
         if (epElement != null && double.TryParse(epElement.Value, out var num))
+        {
+            Log($"[Parser] EpisodeNumber: '{epElement.Value}' → {num}");
             return num;
+        }
 
-        // Fallback: regex patterns for edge cases AnitomySharp might miss
-        return ParseEpisodeNumberFallback(filePath);
+        Log($"[Parser] AnitomySharp found no episode number, trying fallback regex...");
+        var fallback = ParseEpisodeNumberFallback(filePath);
+        Log($"[Parser] Fallback episode number: {fallback?.ToString() ?? "null"}");
+        return fallback;
     }
 
     public static string? ParseTitle(string filePath)
@@ -45,10 +63,15 @@ public static class EpisodeParser
             e => e.Category == Element.ElementCategory.ElementAnimeTitle);
 
         if (titleElement != null && !string.IsNullOrWhiteSpace(titleElement.Value))
+        {
+            Log($"[Parser] Title: '{titleElement.Value}'");
             return titleElement.Value;
+        }
 
-        // Fallback: regex-based title extraction
-        return ParseTitleFallback(filePath);
+        Log($"[Parser] AnitomySharp found no title, trying fallback regex...");
+        var fallback = ParseTitleFallback(filePath);
+        Log($"[Parser] Fallback title: '{fallback ?? "null"}'");
+        return fallback;
     }
 
     public static string? ParseGroup(string filePath)

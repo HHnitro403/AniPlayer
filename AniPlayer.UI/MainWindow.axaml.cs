@@ -216,18 +216,37 @@ namespace AniPlayer.UI
         {
             try
             {
-                Logger.Log("[RefreshPages] Fetching data from database...");
+                Logger.Log("[RefreshPages] === START ===");
+                Logger.Log("[RefreshPages] Fetching libraries from DB...");
                 var libraries = (await _libraryService.GetAllLibrariesAsync()).ToList();
+                Logger.Log($"[RefreshPages] DB returned {libraries.Count} libraries:");
+                foreach (var lib in libraries)
+                    Logger.Log($"[RefreshPages]   Library ID={lib.Id}, path='{lib.Path}', label='{lib.Label}'");
+
+                Logger.Log("[RefreshPages] Fetching all series from DB...");
                 var allSeries = (await _libraryService.GetAllSeriesAsync()).ToList();
-                Logger.Log($"[RefreshPages] Found {libraries.Count} libraries, {allSeries.Count} series");
+                Logger.Log($"[RefreshPages] DB returned {allSeries.Count} series:");
+                foreach (var s in allSeries)
+                    Logger.Log($"[RefreshPages]   Series ID={s.Id}, libId={s.LibraryId}, folder='{s.FolderName}', path='{s.Path}', display='{s.DisplayTitle}'");
+
+                // Also log episode counts per series for debugging
+                foreach (var s in allSeries)
+                {
+                    var episodes = (await _libraryService.GetEpisodesBySeriesIdAsync(s.Id)).ToList();
+                    Logger.Log($"[RefreshPages]   Series '{s.FolderName}' (ID={s.Id}) has {episodes.Count} episodes in DB:");
+                    foreach (var ep in episodes)
+                        Logger.Log($"[RefreshPages]     Episode ID={ep.Id}, ep#={ep.EpisodeNumber?.ToString() ?? "null"}, title='{ep.Title}', file='{ep.FilePath}'");
+                }
 
                 _optionsPage.DisplayLibraries(libraries);
                 _libraryPage.DisplaySeries(allSeries);
-                Logger.Log("[RefreshPages] Pages refreshed");
+                Logger.Log("[RefreshPages] === DONE ===");
             }
             catch (Exception ex)
             {
-                Logger.Log($"[RefreshPages] Failed: {ex.Message}");
+                Logger.Log($"[RefreshPages] === FAILED ===");
+                Logger.Log($"[RefreshPages] Exception: {ex.GetType().Name}: {ex.Message}");
+                Logger.Log($"[RefreshPages] StackTrace: {ex.StackTrace}");
             }
         }
 

@@ -16,13 +16,18 @@ public class ScannerService : IScannerService
     {
         _library = library;
         _logger = logger;
+
+        // Wire parser logging into scan progress so it shows in debug.log
+        EpisodeParser.LogCallback = msg => Report(msg);
     }
 
     public async Task ScanAllLibrariesAsync(CancellationToken ct = default)
     {
-        var libraries = await _library.GetAllLibrariesAsync();
+        var libraries = (await _library.GetAllLibrariesAsync()).ToList();
+        Report($"ScanAllLibraries: found {libraries.Count} library(ies) in DB");
         foreach (var lib in libraries)
         {
+            Report($"ScanAllLibraries: scanning library ID={lib.Id}, path='{lib.Path}'");
             ct.ThrowIfCancellationRequested();
             await ScanLibraryAsync(lib.Id, ct);
         }
@@ -30,16 +35,29 @@ public class ScannerService : IScannerService
 
     public async Task ScanLibraryAsync(int libraryId, CancellationToken ct = default)
     {
+        Report($"=== ScanLibrary START: libraryId={libraryId} ===");
         var lib = await _library.GetLibraryByIdAsync(libraryId);
         if (lib == null)
         {
             Report($"ERROR: Library ID {libraryId} not found in database");
             return;
         }
-        if (!Directory.Exists(lib.Path))
+        Report($"Library from DB: ID={lib.Id}, path='{lib.Path}', label='{lib.Label}'");
+
+        var pathExists = Directory.Exists(lib.Path);
+        Report($"Directory.Exists('{lib.Path}') = {pathExists}");
+        if (!pathExists)
         {
-            Report($"ERROR: Library path does not exist: {lib.Path}");
-            return;
+            // Try trimming trailing slash
+            var trimmed = lib.Path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            var trimmedExists = Directory.Exists(trimmed);
+            Report($"Directory.Exists(trimmed '{trimmed}') = {trimmedExists}");
+            if (!trimmedExists)
+            {
+                Report($"ERROR: Library path does not exist in either form");
+                return;
+            }
+            Report($"Using trimmed path for scan");
         }
 
         Report($"Scanning library: {lib.Label ?? lib.Path} (ID: {lib.Id})");
@@ -48,6 +66,8 @@ public class ScannerService : IScannerService
         // Each top-level subfolder in the library path is a series
         var topDirs = Directory.GetDirectories(lib.Path);
         Report($"Found {topDirs.Length} top-level folders");
+        for (int i = 0; i < topDirs.Length; i++)
+            Report($"  top-dir[{i}]: '{topDirs[i]}'");
 
         var seriesCount = 0;
         foreach (var seriesDir in topDirs)
@@ -114,22 +134,38 @@ public class ScannerService : IScannerService
     private async Task<int> ScanEpisodesInFolderAsync(int seriesId, string folder,
         string episodeType, CancellationToken ct)
     {
+        Report($"    ScanEpisodesInFolder: folder='{folder}', seriesId={seriesId}, type={episodeType}");
+        Report($"    ScanEpisodesInFolder: Directory.Exists='{Directory.Exists(folder)}'");
+
+        var allFiles = Directory.EnumerateFiles(folder).ToList();
+        Report($"    ScanEpisodesInFolder: total files in folder: {allFiles.Count}");
+
         var count = 0;
-        foreach (var file in Directory.EnumerateFiles(folder))
+        foreach (var file in allFiles)
         {
             ct.ThrowIfCancellationRequested();
-            if (!FileHelper.IsSupportedVideo(file))
-                continue;
-
             var fileName = Path.GetFileName(file);
+            var ext = Path.GetExtension(file);
+            var isSupported = FileHelper.IsSupportedVideo(file);
+
+            if (!isSupported)
+            {
+                Report($"    SKIP (unsupported ext '{ext}'): {fileName}");
+                continue;
+            }
+
+            Report($"    FOUND video: {fileName} (ext='{ext}')");
+
             var episodeNumber = EpisodeParser.ParseEpisodeNumber(file);
             var title = EpisodeParser.ParseTitle(file);
 
-            Report($"    Episode: {fileName} → ep={episodeNumber?.ToString() ?? "?"}, type={episodeType}, title={title ?? "(none)"}");
+            Report($"    PARSED: ep={episodeNumber?.ToString() ?? "null"}, title='{title ?? "null"}'");
 
-            await _library.UpsertEpisodeAsync(seriesId, file, title, episodeNumber, episodeType);
+            var epId = await _library.UpsertEpisodeAsync(seriesId, file, title, episodeNumber, episodeType);
+            Report($"    UPSERTED episode ID={epId} for seriesId={seriesId}");
             count++;
         }
+        Report($"    ScanEpisodesInFolder result: {count} episode(s) added");
         return count;
     }
 
