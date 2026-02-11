@@ -7,6 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="AnitomySharp.NET6" Version="0.5.1" />
     <PackageReference Include="Dapper" Version="2.1.66" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.3" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.3" />

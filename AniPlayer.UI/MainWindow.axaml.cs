@@ -150,8 +150,9 @@ namespace AniPlayer.UI
 
             try
             {
-                // Check if this library path is already registered
-                var existing = await _libraryService.GetLibraryByPathAsync(path);
+                // Check if this library path is already registered (try with and without trailing slash)
+                var existing = await _libraryService.GetLibraryByPathAsync(path)
+                    ?? await _libraryService.GetLibraryByPathAsync(path + System.IO.Path.DirectorySeparatorChar);
                 if (existing != null)
                 {
                     Logger.Log($"[AddLibrary] Library already exists (ID: {existing.Id}), re-scanning instead of inserting");

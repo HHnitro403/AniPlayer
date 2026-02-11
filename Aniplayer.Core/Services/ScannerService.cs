@@ -146,17 +146,35 @@ public class ScannerService : IScannerService
         }
 
         Report($"Found {looseFiles.Count} loose video file(s) at library root");
-        var seriesId = await _library.UpsertSeriesAsync(libraryId, "Unsorted", libraryPath);
-        Report($"Unsorted series upserted — ID: {seriesId}");
 
+        // Group files by parsed anime title so each show gets its own series entry
+        var groups = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
         foreach (var file in looseFiles)
         {
+            var parsedTitle = EpisodeParser.ParseTitle(file) ?? "Unsorted";
+            if (!groups.ContainsKey(parsedTitle))
+                groups[parsedTitle] = new List<string>();
+            groups[parsedTitle].Add(file);
+        }
+
+        Report($"Grouped into {groups.Count} series by parsed title");
+
+        foreach (var (seriesName, files) in groups)
+        {
             ct.ThrowIfCancellationRequested();
-            var fileName = Path.GetFileName(file);
-            var episodeNumber = EpisodeParser.ParseEpisodeNumber(file);
-            var title = EpisodeParser.ParseTitle(file);
-            Report($"  Loose file: {fileName} → ep={episodeNumber?.ToString() ?? "?"}, title={title ?? "(none)"}");
-            await _library.UpsertEpisodeAsync(seriesId, file, title, episodeNumber, EpisodeTypes.Episode);
+
+            var seriesId = await _library.UpsertSeriesAsync(libraryId, seriesName, libraryPath);
+            Report($"  Series '{seriesName}' upserted — ID: {seriesId} ({files.Count} file(s))");
+
+            foreach (var file in files)
+            {
+                ct.ThrowIfCancellationRequested();
+                var fileName = Path.GetFileName(file);
+                var episodeNumber = EpisodeParser.ParseEpisodeNumber(file);
+                var title = EpisodeParser.ParseTitle(file);
+                Report($"    Loose file: {fileName} → ep={episodeNumber?.ToString() ?? "?"}, title={title ?? "(none)"}");
+                await _library.UpsertEpisodeAsync(seriesId, file, title, episodeNumber, EpisodeTypes.Episode);
+            }
         }
     }
 
