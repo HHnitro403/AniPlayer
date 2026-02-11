@@ -221,20 +221,9 @@ namespace AniPlayer.UI
                 Logger.Log("Cleaning up previous file...");
                 await CleanupCurrentFileAsync();
 
-                // Acquire OS-level file lock — FileShare.Read so mpv can still open the file
-                Logger.Log("Acquiring file lock...");
-                _lockStream = new FileStream(
-                    filePath,
-                    FileMode.Open,
-                    FileAccess.Read,
-                    FileShare.Read,
-                    bufferSize: 1,
-                    FileOptions.Asynchronous);
-                Logger.Log("File lock acquired");
-
                 _currentFile = Path.GetFileName(filePath);
 
-                // Load the file into mpv using command
+                // Let mpv open the file first so it gets its own read handle
                 Logger.Log("Preparing mpv loadfile command...");
                 var cmd = new[] {
                     Marshal.StringToHGlobalAnsi("loadfile"),
@@ -246,6 +235,18 @@ namespace AniPlayer.UI
                 Logger.Log("Calling mpv_command(loadfile)...");
                 int cmdResult = LibMpvInterop.mpv_command(_mpvHandle, cmd);
                 Logger.Log($"mpv_command returned: {cmdResult}");
+
+                // Now acquire our guard lock — FileShare.Read allows mpv's existing handle
+                // to keep reading, while blocking Windows from renaming/deleting the file
+                Logger.Log("Acquiring file lock...");
+                _lockStream = new FileStream(
+                    filePath,
+                    FileMode.Open,
+                    FileAccess.Read,
+                    FileShare.Read,
+                    bufferSize: 1,
+                    FileOptions.Asynchronous);
+                Logger.Log("File lock acquired");
 
                 // Free command pointers
                 foreach (var ptr in cmd)
