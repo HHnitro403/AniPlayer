@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Aniplayer.Core.Interfaces;
 using System;
 using System.ComponentModel;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace AniPlayer.UI
@@ -40,8 +41,8 @@ namespace AniPlayer.UI
             WireEvents();
             NavigateTo("Home");
 
-            // Start watching all existing libraries
-            _ = StartFolderWatchersAsync();
+            // Load initial data and start watchers
+            _ = InitializeAsync();
 
             Closing += MainWindow_Closing;
             Logger.Log("MainWindow constructor completed");
@@ -110,6 +111,11 @@ namespace AniPlayer.UI
                 Logger.Log($"[MainWindow] OptionsPage.LibraryFolderAdded event received: {path}");
                 _ = AddLibraryAsync(path, "OptionsPage");
             };
+            _optionsPage.LibraryRemoveRequested += id =>
+            {
+                Logger.Log($"[MainWindow] OptionsPage.LibraryRemoveRequested: ID {id}");
+                _ = RemoveLibraryAsync(id);
+            };
 
             // ScannerService — pipe scan progress into debug.log
             _scannerService.ScanProgress += msg => Logger.Log($"[Scanner] {msg}");
@@ -118,7 +124,7 @@ namespace AniPlayer.UI
             _folderWatcher.LibraryChanged += libraryId =>
             {
                 Logger.Log($"[FolderWatcher] Library {libraryId} changed on disk, triggering re-scan");
-                _ = _scannerService.ScanLibraryAsync(libraryId);
+                _ = RescanLibraryAsync(libraryId);
             };
         }
 
@@ -151,6 +157,7 @@ namespace AniPlayer.UI
                     Logger.Log($"[AddLibrary] Library already exists (ID: {existing.Id}), re-scanning instead of inserting");
                     await _scannerService.ScanLibraryAsync(existing.Id);
                     Logger.Log($"[AddLibrary] === RE-SCAN COMPLETE (library {existing.Id}) ===");
+                    await RefreshPagesAsync();
                     return;
                 }
 
@@ -170,6 +177,9 @@ namespace AniPlayer.UI
                 _folderWatcher.WatchLibrary(libraryId, path);
                 Logger.Log($"[AddLibrary] Step 3 DONE: Now watching library {libraryId}");
 
+                // Step 4: Refresh all pages to show new data
+                await RefreshPagesAsync();
+
                 Logger.Log($"[AddLibrary] === SUCCESS (library {libraryId}) ===");
             }
             catch (Exception ex)
@@ -183,7 +193,50 @@ namespace AniPlayer.UI
             }
         }
 
+        private async Task RemoveLibraryAsync(int libraryId)
+        {
+            try
+            {
+                Logger.Log($"[RemoveLibrary] Removing library {libraryId}");
+                _folderWatcher.StopWatching(libraryId);
+                await _libraryService.DeleteLibraryAsync(libraryId);
+                Logger.Log($"[RemoveLibrary] Library {libraryId} deleted");
+                await RefreshPagesAsync();
+            }
+            catch (Exception ex)
+            {
+                Logger.Log($"[RemoveLibrary] Failed: {ex.Message}");
+            }
+        }
+
+        // ── Data refresh ────────────────────────────────────────
+
+        private async Task RefreshPagesAsync()
+        {
+            try
+            {
+                Logger.Log("[RefreshPages] Fetching data from database...");
+                var libraries = (await _libraryService.GetAllLibrariesAsync()).ToList();
+                var allSeries = (await _libraryService.GetAllSeriesAsync()).ToList();
+                Logger.Log($"[RefreshPages] Found {libraries.Count} libraries, {allSeries.Count} series");
+
+                _optionsPage.DisplayLibraries(libraries);
+                _libraryPage.DisplaySeries(allSeries);
+                Logger.Log("[RefreshPages] Pages refreshed");
+            }
+            catch (Exception ex)
+            {
+                Logger.Log($"[RefreshPages] Failed: {ex.Message}");
+            }
+        }
+
         // ── Startup helpers ──────────────────────────────────────
+
+        private async Task InitializeAsync()
+        {
+            await StartFolderWatchersAsync();
+            await RefreshPagesAsync();
+        }
 
         private async Task StartFolderWatchersAsync()
         {
@@ -200,6 +253,12 @@ namespace AniPlayer.UI
             {
                 Logger.Log($"Failed to start folder watchers: {ex.Message}");
             }
+        }
+
+        private async Task RescanLibraryAsync(int libraryId)
+        {
+            await _scannerService.ScanLibraryAsync(libraryId);
+            await RefreshPagesAsync();
         }
 
         // ── Shutdown ─────────────────────────────────────────────

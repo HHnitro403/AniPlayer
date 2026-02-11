@@ -1,17 +1,90 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using Avalonia.Layout;
+using Avalonia.Media;
 using Avalonia.Platform.Storage;
+using Aniplayer.Core.Models;
 using System;
+using System.Collections.Generic;
 
 namespace AniPlayer.UI;
 
 public partial class OptionsPage : UserControl
 {
     public event Action<string>? LibraryFolderAdded;
+    public event Action<int>? LibraryRemoveRequested;
 
     public OptionsPage()
     {
         InitializeComponent();
+    }
+
+    public void DisplayLibraries(IEnumerable<Library> libraries)
+    {
+        Logger.Log("[OptionsPage] DisplayLibraries called");
+        LibraryFoldersList.Children.Clear();
+
+        var count = 0;
+        foreach (var lib in libraries)
+        {
+            count++;
+            var row = CreateLibraryRow(lib);
+            LibraryFoldersList.Children.Add(row);
+        }
+
+        Logger.Log($"[OptionsPage] Displayed {count} library folder(s)");
+    }
+
+    private Border CreateLibraryRow(Library lib)
+    {
+        var labelText = new TextBlock
+        {
+            Text = lib.Label ?? System.IO.Path.GetFileName(lib.Path.TrimEnd(
+                System.IO.Path.DirectorySeparatorChar,
+                System.IO.Path.AltDirectorySeparatorChar)),
+            FontWeight = FontWeight.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+        };
+
+        var pathText = new TextBlock
+        {
+            Text = lib.Path,
+            FontSize = 12,
+            Opacity = 0.5,
+            VerticalAlignment = VerticalAlignment.Center,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+        };
+
+        var textStack = new StackPanel { Spacing = 2 };
+        textStack.Children.Add(labelText);
+        textStack.Children.Add(pathText);
+
+        var removeBtn = new Button
+        {
+            Content = "Remove",
+            VerticalAlignment = VerticalAlignment.Center,
+            Padding = new Avalonia.Thickness(8, 4),
+        };
+
+        var libId = lib.Id;
+        removeBtn.Click += (_, _) => LibraryRemoveRequested?.Invoke(libId);
+
+        var grid = new Grid
+        {
+            ColumnDefinitions = ColumnDefinitions.Parse("*,Auto"),
+        };
+        grid.Children.Add(textStack);
+        Grid.SetColumn(removeBtn, 1);
+        grid.Children.Add(removeBtn);
+
+        return new Border
+        {
+            Padding = new Avalonia.Thickness(12, 8),
+            CornerRadius = new Avalonia.CornerRadius(6),
+            Background = new SolidColorBrush(Color.FromArgb(30, 255, 255, 255)),
+            Child = grid,
+        };
     }
 
     private async void AddLibraryFolderButton_Click(object? sender, RoutedEventArgs e)
