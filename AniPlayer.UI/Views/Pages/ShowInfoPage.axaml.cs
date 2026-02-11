@@ -33,7 +33,7 @@ public partial class ShowInfoPage : UserControl
         _seriesId = series.Id;
         _allEpisodes = episodes.ToList();
 
-        Logger.Log($"[ShowInfoPage] LoadSeriesData: series ID={series.Id}, title='{series.DisplayTitle}', episodes={_allEpisodes.Count}");
+        Logger.Log($"[ShowInfoPage] LoadSeriesData: series ID={series.Id}, title='{series.DisplayTitle}', episodes={_allEpisodes.Count}", LogRegion.UI);
 
         // Header info
         TitleText.Text = series.DisplayTitle;
@@ -95,7 +95,7 @@ public partial class ShowInfoPage : UserControl
         foreach (var ep in filtered)
             EpisodeListPanel.Children.Add(CreateEpisodeRow(ep));
 
-        Logger.Log($"[ShowInfoPage] ApplyEpisodeFilter: filterIndex={selectedIndex}, showing {filtered.Count}/{_allEpisodes.Count} episodes");
+        Logger.Log($"[ShowInfoPage] ApplyEpisodeFilter: filterIndex={selectedIndex}, showing {filtered.Count}/{_allEpisodes.Count} episodes", LogRegion.UI);
     }
 
     private Border CreateEpisodeRow(Episode ep)

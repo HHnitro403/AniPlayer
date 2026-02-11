@@ -34,9 +34,9 @@ public partial class LibraryPage : UserControl
     public void DisplaySeries(IEnumerable<Series> series)
     {
         _allSeries = series.ToList();
-        Logger.Log($"[LibraryPage] DisplaySeries called with {_allSeries.Count} series");
+        Logger.Log($"[LibraryPage] DisplaySeries called with {_allSeries.Count} series", LogRegion.UI);
         foreach (var s in _allSeries)
-            Logger.Log($"[LibraryPage]   Series ID={s.Id}, display='{s.DisplayTitle}', folder='{s.FolderName}'");
+            Logger.Log($"[LibraryPage]   Series ID={s.Id}, display='{s.DisplayTitle}', folder='{s.FolderName}'", LogRegion.UI);
         ApplyFilter();
     }
 
@@ -60,8 +60,8 @@ public partial class LibraryPage : UserControl
         EmptyState.IsVisible = filtered.Count == 0;
         SeriesGrid.IsVisible = filtered.Count > 0;
 
-        Logger.Log($"[LibraryPage] ApplyFilter: query='{query}', total={_allSeries.Count}, filtered={filtered.Count}, cards={cards.Count}");
-        Logger.Log($"[LibraryPage] EmptyState.IsVisible={EmptyState.IsVisible}, SeriesGrid.IsVisible={SeriesGrid.IsVisible}");
+        Logger.Log($"[LibraryPage] ApplyFilter: query='{query}', total={_allSeries.Count}, filtered={filtered.Count}, cards={cards.Count}", LogRegion.UI);
+        Logger.Log($"[LibraryPage] EmptyState.IsVisible={EmptyState.IsVisible}, SeriesGrid.IsVisible={SeriesGrid.IsVisible}", LogRegion.UI);
     }
 
     private Border CreateSeriesCard(Series series)

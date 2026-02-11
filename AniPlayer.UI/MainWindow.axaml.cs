@@ -86,6 +86,11 @@ namespace AniPlayer.UI
             // HomePage
             _homePage.PlayFileRequested   += PlayFile;
             _homePage.AddLibraryRequested += () => NavigateTo("Settings");
+            _homePage.SeriesSelected += id =>
+            {
+                Logger.Log($"[MainWindow] HomePage.SeriesSelected: ID={id}");
+                _ = OpenSeriesAsync(id);
+            };
 
             // LibraryPage
             _libraryPage.SeriesSelected += id =>
@@ -122,8 +127,8 @@ namespace AniPlayer.UI
                 _ = RemoveLibraryAsync(id);
             };
 
-            // ScannerService — pipe scan progress into debug.log
-            _scannerService.ScanProgress += msg => Logger.Log($"[Scanner] {msg}");
+            // ScannerService — pipe scan progress into debug.log (Scanner region)
+            _scannerService.ScanProgress += msg => Logger.Log($"[Scanner] {msg}", LogRegion.Scanner);
 
             // FolderWatcher — re-scan when files change on disk
             _folderWatcher.LibraryChanged += libraryId =>
@@ -246,29 +251,36 @@ namespace AniPlayer.UI
             try
             {
                 Logger.Log("[RefreshPages] === START ===");
-                Logger.Log("[RefreshPages] Fetching libraries from DB...");
+
                 var libraries = (await _libraryService.GetAllLibrariesAsync()).ToList();
-                Logger.Log($"[RefreshPages] DB returned {libraries.Count} libraries:");
+                Logger.Log($"[RefreshPages] DB returned {libraries.Count} libraries");
                 foreach (var lib in libraries)
-                    Logger.Log($"[RefreshPages]   Library ID={lib.Id}, path='{lib.Path}', label='{lib.Label}'");
+                    Logger.Log($"[RefreshPages]   Library ID={lib.Id}, path='{lib.Path}', label='{lib.Label}'", LogRegion.DB);
 
-                Logger.Log("[RefreshPages] Fetching all series from DB...");
                 var allSeries = (await _libraryService.GetAllSeriesAsync()).ToList();
-                Logger.Log($"[RefreshPages] DB returned {allSeries.Count} series:");
+                Logger.Log($"[RefreshPages] DB returned {allSeries.Count} series");
                 foreach (var s in allSeries)
-                    Logger.Log($"[RefreshPages]   Series ID={s.Id}, libId={s.LibraryId}, folder='{s.FolderName}', path='{s.Path}', display='{s.DisplayTitle}'");
+                    Logger.Log($"[RefreshPages]   Series ID={s.Id}, libId={s.LibraryId}, folder='{s.FolderName}', display='{s.DisplayTitle}'", LogRegion.DB);
 
-                // Also log episode counts per series for debugging
+                // Log episode counts per series (DB region — verbose)
                 foreach (var s in allSeries)
                 {
                     var episodes = (await _libraryService.GetEpisodesBySeriesIdAsync(s.Id)).ToList();
-                    Logger.Log($"[RefreshPages]   Series '{s.FolderName}' (ID={s.Id}) has {episodes.Count} episodes in DB:");
+                    Logger.Log($"[RefreshPages]   Series '{s.FolderName}' (ID={s.Id}) has {episodes.Count} episodes", LogRegion.DB);
                     foreach (var ep in episodes)
-                        Logger.Log($"[RefreshPages]     Episode ID={ep.Id}, ep#={ep.EpisodeNumber?.ToString() ?? "null"}, title='{ep.Title}', file='{ep.FilePath}'");
+                        Logger.Log($"[RefreshPages]     Episode ID={ep.Id}, ep#={ep.EpisodeNumber?.ToString() ?? "null"}, file='{ep.FilePath}'", LogRegion.DB);
                 }
 
+                // Recently added series (last 14 days)
+                var recentSeries = (await _libraryService.GetRecentlyAddedSeriesAsync(14)).ToList();
+                Logger.Log($"[RefreshPages] Recently added (14 days): {recentSeries.Count} series");
+
+                // Push data to pages
                 _optionsPage.DisplayLibraries(libraries);
                 _libraryPage.DisplaySeries(allSeries);
+                _homePage.DisplayRecentlyAdded(recentSeries);
+                _homePage.SetHasLibraries(libraries.Count > 0);
+
                 Logger.Log("[RefreshPages] === DONE ===");
             }
             catch (Exception ex)

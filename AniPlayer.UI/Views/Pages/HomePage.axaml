@@ -43,7 +43,7 @@
             </StackPanel>
 
             <!-- Quick Actions -->
-            <StackPanel Spacing="12">
+            <StackPanel x:Name="QuickActionsSection" Spacing="12">
                 <TextBlock Text="Quick Actions"
                            FontSize="22" FontWeight="SemiBold"
                            Foreground="{DynamicResource SystemControlForegroundBaseHighBrush}"/>
