@@ -29,6 +29,13 @@ public class LibraryService : ILibraryService
             Queries.GetLibraryById, new { id });
     }
 
+    public async Task<Library?> GetLibraryByPathAsync(string path)
+    {
+        using var conn = _db.CreateConnection();
+        return await conn.QueryFirstOrDefaultAsync<Library>(
+            Queries.GetLibraryByPath, new { path });
+    }
+
     public async Task<int> AddLibraryAsync(string path, string? label = null)
     {
         using var conn = _db.CreateConnection();

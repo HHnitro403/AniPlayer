@@ -10,6 +10,9 @@ public static class Queries
     public const string GetLibraryById =
         "SELECT id AS Id, path AS Path, label AS Label, created_at AS CreatedAt FROM Libraries WHERE id = @id";
 
+    public const string GetLibraryByPath =
+        "SELECT id AS Id, path AS Path, label AS Label, created_at AS CreatedAt FROM Libraries WHERE path = @path";
+
     public const string InsertLibrary =
         "INSERT INTO Libraries (path, label) VALUES (@Path, @Label) RETURNING id";
 

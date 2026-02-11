@@ -7,6 +7,7 @@ public interface ILibraryService
     // Libraries
     Task<IEnumerable<Library>> GetAllLibrariesAsync();
     Task<Library?> GetLibraryByIdAsync(int id);
+    Task<Library?> GetLibraryByPathAsync(string path);
     Task<int> AddLibraryAsync(string path, string? label = null);
     Task DeleteLibraryAsync(int id);
 

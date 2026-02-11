@@ -127,7 +127,11 @@ namespace AniPlayer.UI
         private async Task AddLibraryAsync(string path, string source)
         {
             Logger.Log($"[AddLibrary] === START (source: {source}) ===");
-            Logger.Log($"[AddLibrary] Path: {path}");
+            Logger.Log($"[AddLibrary] Raw path: {path}");
+
+            // Normalize: trim trailing directory separators so Path.GetFileName works
+            path = path.TrimEnd(System.IO.Path.DirectorySeparatorChar, System.IO.Path.AltDirectorySeparatorChar);
+            Logger.Log($"[AddLibrary] Normalized path: {path}");
 
             // Validate path
             var exists = System.IO.Directory.Exists(path);
@@ -140,6 +144,16 @@ namespace AniPlayer.UI
 
             try
             {
+                // Check if this library path is already registered
+                var existing = await _libraryService.GetLibraryByPathAsync(path);
+                if (existing != null)
+                {
+                    Logger.Log($"[AddLibrary] Library already exists (ID: {existing.Id}), re-scanning instead of inserting");
+                    await _scannerService.ScanLibraryAsync(existing.Id);
+                    Logger.Log($"[AddLibrary] === RE-SCAN COMPLETE (library {existing.Id}) ===");
+                    return;
+                }
+
                 // Step 1: Insert into database
                 var label = System.IO.Path.GetFileName(path);
                 Logger.Log($"[AddLibrary] Step 1: Inserting into DB — path='{path}', label='{label}'");
