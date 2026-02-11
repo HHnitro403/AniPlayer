@@ -31,5 +31,14 @@ namespace AniPlayer.UI
 
         [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl)]
         public static extern int mpv_set_option_string(IntPtr mpv, byte[] name, byte[] value);
+
+        [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl)]
+        public static extern int mpv_request_log_messages(IntPtr mpv, byte[] min_level);
+
+        [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl)]
+        public static extern IntPtr mpv_wait_event(IntPtr mpv, double timeout);
+
+        [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl)]
+        public static extern IntPtr mpv_error_string(int error);
     }
 }

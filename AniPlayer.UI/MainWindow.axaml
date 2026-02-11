@@ -2,6 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="using:AniPlayer.UI"
         mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="700"
         x:Class="AniPlayer.UI.MainWindow"
         Title="AniPlayer LibMpv POC"
@@ -28,14 +29,15 @@
             </StackPanel>
         </StackPanel>
 
-        <!-- Video Area (POC Note: mpv renders in separate window for now) -->
-        <Border Background="Black">
-            <TextBlock Text="POC: Video plays in separate mpv window&#x0a;Audio track switching and file locking verified below"
+        <!-- Video Area -->
+        <Grid x:Name="VideoContainer" Background="Black">
+            <local:VideoHost x:Name="VideoHostControl" />
+            <TextBlock Text="Open a video file to start playback"
                        Foreground="White"
                        HorizontalAlignment="Center"
                        VerticalAlignment="Center"
                        TextAlignment="Center"
                        x:Name="PlaceholderText"/>
-        </Border>
+        </Grid>
     </DockPanel>
 </Window>
