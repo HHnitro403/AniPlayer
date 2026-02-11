@@ -68,9 +68,7 @@ namespace AniPlayer.UI
         {
             try
             {
-                Logger.Log("OnRenderNeeded - calling Render()");
                 _renderer?.Render();
-                Logger.Log("Render() completed");
             }
             catch (Exception ex)
             {

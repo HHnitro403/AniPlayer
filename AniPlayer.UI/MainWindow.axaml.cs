@@ -221,13 +221,13 @@ namespace AniPlayer.UI
                 Logger.Log("Cleaning up previous file...");
                 await CleanupCurrentFileAsync();
 
-                // Acquire OS-level file lock with FileShare.None
+                // Acquire OS-level file lock — FileShare.Read so mpv can still open the file
                 Logger.Log("Acquiring file lock...");
                 _lockStream = new FileStream(
                     filePath,
                     FileMode.Open,
                     FileAccess.Read,
-                    FileShare.None,
+                    FileShare.Read,
                     bufferSize: 1,
                     FileOptions.Asynchronous);
                 Logger.Log("File lock acquired");
@@ -603,7 +603,9 @@ namespace AniPlayer.UI
             // Clean up resources
             await CleanupCurrentFileAsync();
 
-            // Dispose mpv context
+            // Render context must be freed before mpv_terminate_destroy
+            VideoHostControl.Renderer?.Dispose();
+
             if (_mpvHandle != IntPtr.Zero)
             {
                 LibMpvInterop.mpv_terminate_destroy(_mpvHandle);
