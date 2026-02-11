@@ -3,41 +3,22 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="using:AniPlayer.UI"
-        mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="700"
+        mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="750"
         x:Class="AniPlayer.UI.MainWindow"
-        Title="AniPlayer LibMpv POC"
-        Width="1000" Height="700">
+        Title="AniPlayer"
+        Width="1200" Height="750"
+        MinWidth="800" MinHeight="500"
+        Background="#12121E">
 
-    <DockPanel>
-        <!-- Top Bar -->
-        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="10">
-            <Button x:Name="OpenFileButton" Content="Open File" Click="OpenFileButton_Click" Padding="10,5"/>
-        </StackPanel>
+    <Grid ColumnDefinitions="Auto,*">
 
-        <!-- Bottom Bar -->
-        <StackPanel DockPanel.Dock="Bottom" Margin="10" Spacing="10">
-            <!-- Audio Track Buttons -->
-            <StackPanel Orientation="Horizontal" Spacing="5">
-                <TextBlock Text="Audio:" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                <WrapPanel x:Name="AudioTracksPanel" />
-            </StackPanel>
+        <!-- Sidebar -->
+        <local:Sidebar x:Name="SidebarControl" Grid.Column="0"/>
 
-            <!-- Status Line -->
-            <StackPanel Orientation="Horizontal" Spacing="20">
-                <TextBlock x:Name="StatusText" Text="Status: Stopped"/>
-                <TextBlock x:Name="LockText" Text="Lock: Not held"/>
-            </StackPanel>
-        </StackPanel>
+        <!-- Page content area -->
+        <Border Grid.Column="1" Background="#12121E">
+            <ContentControl x:Name="PageHost"/>
+        </Border>
 
-        <!-- Video Area -->
-        <Grid x:Name="VideoContainer" Background="Black">
-            <local:VideoHost x:Name="VideoHostControl" />
-            <TextBlock Text="Open a video file to start playback"
-                       Foreground="White"
-                       HorizontalAlignment="Center"
-                       VerticalAlignment="Center"
-                       TextAlignment="Center"
-                       x:Name="PlaceholderText"/>
-        </Grid>
-    </DockPanel>
+    </Grid>
 </Window>

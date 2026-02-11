@@ -1,9 +1,71 @@
-<Window xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
-        x:Class="AniPlayer.UI.OptionsPage"
-        Title="OptionsPage">
-  Welcome to Avalonia!
-</Window>
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="600"
+             x:Class="AniPlayer.UI.OptionsPage">
+
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="32,24" Spacing="28" MaxWidth="700">
+
+            <TextBlock Text="Settings" FontSize="24" FontWeight="SemiBold"/>
+
+            <!-- Library Folders -->
+            <StackPanel Spacing="8">
+                <TextBlock Text="Library Folders" FontSize="16" FontWeight="SemiBold"/>
+                <TextBlock Text="Folders that AniPlayer scans for anime."
+                           FontSize="13" Opacity="0.5"/>
+                <StackPanel x:Name="LibraryFoldersList" Spacing="4"/>
+                <Button x:Name="AddLibraryFolderButton"
+                        Content="+ Add Folder" Padding="12,8"
+                        Click="AddLibraryFolderButton_Click"/>
+            </StackPanel>
+
+            <Separator/>
+
+            <!-- Playback -->
+            <StackPanel Spacing="8">
+                <TextBlock Text="Playback" FontSize="16" FontWeight="SemiBold"/>
+                <Grid ColumnDefinitions="*,Auto" Margin="0,4">
+                    <TextBlock Text="Auto-play next episode"
+                               VerticalAlignment="Center"/>
+                    <ToggleSwitch x:Name="AutoPlayToggle" Grid.Column="1"
+                                  IsChecked="True"/>
+                </Grid>
+                <Grid ColumnDefinitions="*,Auto" Margin="0,4">
+                    <TextBlock Text="Remember audio/subtitle track per series"
+                               VerticalAlignment="Center"/>
+                    <ToggleSwitch x:Name="RememberTracksToggle" Grid.Column="1"
+                                  IsChecked="True"/>
+                </Grid>
+            </StackPanel>
+
+            <Separator/>
+
+            <!-- AniList -->
+            <StackPanel Spacing="8">
+                <TextBlock Text="AniList Integration" FontSize="16" FontWeight="SemiBold"/>
+                <TextBlock Text="Fetch metadata (covers, synopses, scores) from AniList."
+                           FontSize="13" Opacity="0.5"/>
+                <Grid ColumnDefinitions="*,Auto" Margin="0,4">
+                    <TextBlock Text="Auto-fetch metadata for new series"
+                               VerticalAlignment="Center"/>
+                    <ToggleSwitch x:Name="AutoFetchToggle" Grid.Column="1"
+                                  IsChecked="True"/>
+                </Grid>
+            </StackPanel>
+
+            <Separator/>
+
+            <!-- About -->
+            <StackPanel Spacing="4">
+                <TextBlock Text="About" FontSize="16" FontWeight="SemiBold"/>
+                <TextBlock Text="AniPlayer — Local Anime Media Player"
+                           FontSize="13" Opacity="0.6"/>
+                <TextBlock Text="Built with Avalonia + libmpv"
+                           FontSize="12" Opacity="0.4"/>
+            </StackPanel>
+
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

@@ -1,9 +1,64 @@
-<Window xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
-        x:Class="AniPlayer.UI.HomePage"
-        Title="Window1">
-  Welcome to Avalonia!
-</Window>
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="600"
+             x:Class="AniPlayer.UI.HomePage">
+
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="32,24" Spacing="32">
+
+            <!-- Continue Watching -->
+            <StackPanel Spacing="12">
+                <TextBlock Text="Continue Watching"
+                           FontSize="22" FontWeight="SemiBold"
+                           Foreground="{DynamicResource SystemControlForegroundBaseHighBrush}"/>
+                <TextBlock x:Name="ContinueWatchingEmpty"
+                           Text="Nothing here yet — start watching something!"
+                           Opacity="0.5" FontSize="14"/>
+                <ItemsControl x:Name="ContinueWatchingList">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel Orientation="Horizontal"/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                </ItemsControl>
+            </StackPanel>
+
+            <!-- Recently Added -->
+            <StackPanel Spacing="12">
+                <TextBlock Text="Recently Added"
+                           FontSize="22" FontWeight="SemiBold"
+                           Foreground="{DynamicResource SystemControlForegroundBaseHighBrush}"/>
+                <TextBlock x:Name="RecentlyAddedEmpty"
+                           Text="Add a library folder to get started."
+                           Opacity="0.5" FontSize="14"/>
+                <ItemsControl x:Name="RecentlyAddedList">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel Orientation="Horizontal"/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                </ItemsControl>
+            </StackPanel>
+
+            <!-- Quick Actions -->
+            <StackPanel Spacing="12">
+                <TextBlock Text="Quick Actions"
+                           FontSize="22" FontWeight="SemiBold"
+                           Foreground="{DynamicResource SystemControlForegroundBaseHighBrush}"/>
+                <StackPanel Orientation="Horizontal" Spacing="12">
+                    <Button x:Name="AddLibraryButton"
+                            Content="Add Library Folder"
+                            Padding="16,10"
+                            Click="AddLibraryButton_Click"/>
+                    <Button x:Name="OpenFileButton"
+                            Content="Open Video File"
+                            Padding="16,10"
+                            Click="OpenFileButton_Click"/>
+                </StackPanel>
+            </StackPanel>
+
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>
