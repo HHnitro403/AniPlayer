@@ -236,6 +236,13 @@ namespace AniPlayer.UI
         private async Task InitializeAsync()
         {
             await StartFolderWatchersAsync();
+
+            // Scan all libraries on startup to pick up any that were never
+            // successfully scanned (e.g. previous crash) or have new files
+            Logger.Log("[Startup] Scanning all libraries...");
+            await _scannerService.ScanAllLibrariesAsync();
+            Logger.Log("[Startup] Startup scan complete");
+
             await RefreshPagesAsync();
         }
 
