@@ -25,6 +25,11 @@ namespace AniPlayer.UI
         public static extern void mpv_render_context_report_swap(IntPtr ctx);
 
         [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl)]
+        public static extern ulong mpv_render_context_update(IntPtr ctx);
+
+        public const ulong MPV_RENDER_UPDATE_FRAME = 1;
+
+        [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl)]
         public static extern void mpv_render_context_set_update_callback(
             IntPtr ctx,
             MpvRenderUpdateCallback callback,

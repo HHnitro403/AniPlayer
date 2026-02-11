@@ -248,16 +248,14 @@ namespace AniPlayer.UI
 
         private void OnMpvRenderUpdate(IntPtr ctx)
         {
-            // This is called from MPV thread when it wants to render
-            // Marshal to UI thread
+            // Called from mpv thread — check if a new frame is actually available
             try
             {
-                Logger.Log("OnMpvRenderUpdate called - requesting render");
-                Dispatcher.UIThread.Post(() =>
-                {
-                    Logger.Log("Dispatched render request to UI thread");
-                    RenderNeeded?.Invoke();
-                });
+                ulong flags = LibMpvRenderInterop.mpv_render_context_update(_renderContext);
+                if ((flags & LibMpvRenderInterop.MPV_RENDER_UPDATE_FRAME) == 0)
+                    return;
+
+                Dispatcher.UIThread.Post(() => RenderNeeded?.Invoke());
             }
             catch (Exception ex)
             {
@@ -267,26 +265,18 @@ namespace AniPlayer.UI
 
         public void Render()
         {
-            Logger.Log($"Render() called - context: {_renderContext}, glContext: {_glContext}");
-
             if (_renderContext == IntPtr.Zero || _glContext == IntPtr.Zero)
-            {
-                Logger.LogError("Render() called but contexts are null");
                 return;
-            }
 
             try
             {
-                Logger.Log("Starting render...");
                 // Make context current
                 OpenGLInterop.wglMakeCurrent(_deviceContext, _glContext);
 
-                // Clear to black
+                // Set viewport and clear
+                OpenGLInterop.glViewport(0, 0, _width, _height);
                 OpenGLInterop.glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
                 OpenGLInterop.glClear(OpenGLInterop.GL_COLOR_BUFFER_BIT | OpenGLInterop.GL_DEPTH_BUFFER_BIT);
-
-                // Set viewport
-                OpenGLInterop.glViewport(0, 0, _width, _height);
 
                 // Create FBO params (render to default framebuffer = 0)
                 var fbo = new LibMpvRenderInterop.MpvOpenGLFBO
@@ -294,13 +284,13 @@ namespace AniPlayer.UI
                     fbo = 0,
                     w = _width,
                     h = _height,
-                    internal_format = 0 // Use default
+                    internal_format = 0
                 };
 
                 IntPtr fboPtr = Marshal.AllocHGlobal(Marshal.SizeOf(fbo));
                 Marshal.StructureToPtr(fbo, fboPtr, false);
 
-                int flipY = 1; // Flip Y coordinate
+                int flipY = 1;
                 IntPtr flipYPtr = Marshal.AllocHGlobal(sizeof(int));
                 Marshal.WriteInt32(flipYPtr, flipY);
 
@@ -328,7 +318,6 @@ namespace AniPlayer.UI
                 int renderParamSize = Marshal.SizeOf<LibMpvRenderInterop.MpvRenderParam>();
                 IntPtr renderParamsPtr = Marshal.AllocHGlobal(renderParamSize * renderParams.Length);
 
-                // Copy each struct to contiguous memory
                 for (int i = 0; i < renderParams.Length; i++)
                 {
                     IntPtr offset = IntPtr.Add(renderParamsPtr, i * renderParamSize);
@@ -336,23 +325,16 @@ namespace AniPlayer.UI
                 }
 
                 // Render
-                Logger.Log("Calling mpv_render_context_render...");
                 LibMpvRenderInterop.mpv_render_context_render(_renderContext, renderParamsPtr);
-                Logger.Log("mpv_render_context_render completed");
 
                 // Cleanup
                 Marshal.FreeHGlobal(renderParamsPtr);
                 Marshal.FreeHGlobal(fboPtr);
                 Marshal.FreeHGlobal(flipYPtr);
 
-                // Swap buffers
-                Logger.Log("Swapping buffers...");
+                // Swap buffers and report to mpv
                 OpenGLInterop.SwapBuffers(_deviceContext);
-
-                // Report swap to mpv
-                Logger.Log("Reporting swap to MPV...");
                 LibMpvRenderInterop.mpv_render_context_report_swap(_renderContext);
-                Logger.Log("Render cycle complete");
             }
             catch (Exception ex)
             {
