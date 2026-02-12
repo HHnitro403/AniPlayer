@@ -47,6 +47,7 @@ public partial class PlayerPage : UserControl
 
     // Seek debouncing — prevent flooding mpv with seek commands
     private long _lastSeekTicks;
+    private volatile bool _seekInFlight; // true while a background seek is running
     // Prevents re-entrant timer ticks from piling up if mpv is slow
     private bool _tickInProgress;
 
@@ -366,10 +367,14 @@ public partial class PlayerPage : UserControl
     {
         if (_mpvHandle == IntPtr.Zero) return;
 
-        // Debounce: skip if last seek was <200ms ago — prevents flooding mpv
+        // Drop seek if previous one is still running — prevents queue buildup
+        if (_seekInFlight) return;
+
+        // Debounce: skip if last seek was <250ms ago
         var now = Environment.TickCount64;
-        if (now - _lastSeekTicks < 200) return;
+        if (now - _lastSeekTicks < 250) return;
         _lastSeekTicks = now;
+        _seekInFlight = true;
 
         // Run off UI thread — mpv_command("seek") blocks until the seek is done,
         // which can take 100-500ms on HEVC content and freezes the UI.
@@ -392,6 +397,10 @@ public partial class PlayerPage : UserControl
             catch (Exception ex)
             {
                 Logger.Log($"SeekRelative failed: {ex.Message}");
+            }
+            finally
+            {
+                _seekInFlight = false;
             }
         });
     }
@@ -898,6 +907,9 @@ public partial class PlayerPage : UserControl
     private void SeekAbsolute(double seconds)
     {
         if (_mpvHandle == IntPtr.Zero) return;
+        if (_seekInFlight) return;
+        _seekInFlight = true;
+
         var handle = _mpvHandle;
         Task.Run(() =>
         {
@@ -918,6 +930,10 @@ public partial class PlayerPage : UserControl
             catch (Exception ex)
             {
                 Logger.Log($"SeekAbsolute failed: {ex.Message}");
+            }
+            finally
+            {
+                _seekInFlight = false;
             }
         });
     }
