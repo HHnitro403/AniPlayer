@@ -38,6 +38,16 @@
                     <ToggleSwitch x:Name="RememberTracksToggle" Grid.Column="1"
                                   IsChecked="True"/>
                 </Grid>
+                <Grid ColumnDefinitions="*,Auto" Margin="0,4">
+                    <StackPanel>
+                        <TextBlock Text="Vsync"
+                                   VerticalAlignment="Center"/>
+                        <TextBlock Text="Syncs frames to monitor refresh rate. Disable if you experience stuttering."
+                                   FontSize="12" Opacity="0.5"/>
+                    </StackPanel>
+                    <ToggleSwitch x:Name="VsyncToggle" Grid.Column="1"
+                                  IsChecked="False"/>
+                </Grid>
             </StackPanel>
 
             <Separator/>

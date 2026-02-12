@@ -3,7 +3,9 @@ using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
+using Aniplayer.Core.Interfaces;
 using Aniplayer.Core.Models;
+using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Collections.Generic;
 
@@ -14,9 +16,24 @@ public partial class OptionsPage : UserControl
     public event Action<string>? LibraryFolderAdded;
     public event Action<int>? LibraryRemoveRequested;
 
+    private readonly ISettingsService _settings;
+
     public OptionsPage()
     {
         InitializeComponent();
+        _settings = App.Services.GetRequiredService<ISettingsService>();
+        _ = LoadSettingsAsync();
+        VsyncToggle.IsCheckedChanged += OnVsyncToggleChanged;
+    }
+
+    private async System.Threading.Tasks.Task LoadSettingsAsync()
+    {
+        VsyncToggle.IsChecked = await _settings.GetBoolAsync("vsync", false);
+    }
+
+    private void OnVsyncToggleChanged(object? sender, RoutedEventArgs e)
+    {
+        _ = _settings.SetAsync("vsync", VsyncToggle.IsChecked == true ? "1" : "0");
     }
 
     public void DisplayLibraries(IEnumerable<Library> libraries)

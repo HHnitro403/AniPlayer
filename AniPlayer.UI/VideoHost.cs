@@ -22,7 +22,7 @@ namespace AniPlayer.UI
             Logger.Log("VideoHost constructor called");
         }
 
-        public void InitializeRenderer(IntPtr mpvHandle)
+        public void InitializeRenderer(IntPtr mpvHandle, bool vsync = false)
         {
             Logger.Log($"InitializeRenderer called with MPV handle: {mpvHandle}");
 
@@ -42,7 +42,7 @@ namespace AniPlayer.UI
                 int height = Math.Max((int)size.Height, 1);
 
                 Logger.Log($"Initializing renderer with size: {width}x{height}");
-                bool success = _renderer.Initialize(width, height);
+                bool success = _renderer.Initialize(width, height, vsync);
 
                 if (!success)
                 {

@@ -35,6 +35,7 @@ public partial class PlayerPage : UserControl
     private int _currentSeriesId;
     private ILibraryService? _libraryService;
     private Dictionary<int, (string? lang, string? title)> _audioTrackInfo = new();
+    private bool _vsyncEnabled;
 
     [DllImport("user32.dll")]
     private static extern bool GetCursorPos(out POINT lpPoint);
@@ -79,7 +80,7 @@ public partial class PlayerPage : UserControl
             await Task.Delay(500);
             if (VideoHostControl.NativeHandle != IntPtr.Zero)
             {
-                VideoHostControl.InitializeRenderer(_mpvHandle);
+                VideoHostControl.InitializeRenderer(_mpvHandle, _vsyncEnabled);
                 Logger.Log($"Renderer re-initialized: {VideoHostControl.Renderer?.IsInitialized ?? false}");
             }
             else
@@ -92,7 +93,7 @@ public partial class PlayerPage : UserControl
 
     // ── MPV init (moved from MainWindow) ─────────────────────
 
-    private void InitializeMpv()
+    private async void InitializeMpv()
     {
         Logger.Log("=== InitializeMpv START ===");
         try
@@ -105,6 +106,15 @@ public partial class PlayerPage : UserControl
                     Avalonia.Threading.Dispatcher.UIThread.Post(InitializeMpv));
                 return;
             }
+
+            // Read vsync setting (default off)
+            try
+            {
+                var settings = App.Services.GetService(typeof(ISettingsService)) as ISettingsService;
+                if (settings != null)
+                    _vsyncEnabled = await settings.GetBoolAsync("vsync", false);
+            }
+            catch { /* settings unavailable — default to off */ }
 
             Logger.Log("Creating mpv instance...");
             _mpvHandle = LibMpvInterop.mpv_create();
@@ -136,7 +146,7 @@ public partial class PlayerPage : UserControl
             Logger.Log($"mpv_initialize: {initResult}");
             if (initResult < 0) { StatusText.Text = $"Error — init ({initResult})"; return; }
 
-            VideoHostControl.InitializeRenderer(_mpvHandle);
+            VideoHostControl.InitializeRenderer(_mpvHandle, _vsyncEnabled);
             if (VideoHostControl.Renderer == null || !VideoHostControl.Renderer.IsInitialized)
             {
                 StatusText.Text = "Error — renderer";

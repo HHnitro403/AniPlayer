@@ -33,9 +33,9 @@ namespace AniPlayer.UI
             Logger.Log($"MPV handle: {mpvHandle}, Window handle: {windowHandle}");
         }
 
-        public bool Initialize(int width, int height)
+        public bool Initialize(int width, int height, bool vsync = false)
         {
-            Logger.Log($"=== MpvRenderer Initialize START (size: {width}x{height}) ===");
+            Logger.Log($"=== MpvRenderer Initialize START (size: {width}x{height}, vsync: {vsync}) ===");
 
             try
             {
@@ -83,15 +83,15 @@ namespace AniPlayer.UI
 
                 Logger.Log("OpenGL context is current");
 
-                // Enable vsync — swap buffers synced to monitor refresh rate
+                // Vsync — sync swap buffers to monitor refresh rate (user-configurable)
                 try
                 {
                     IntPtr swapIntervalPtr = OpenGLInterop.wglGetProcAddress("wglSwapIntervalEXT");
                     if (swapIntervalPtr != IntPtr.Zero)
                     {
                         var wglSwapInterval = Marshal.GetDelegateForFunctionPointer<WglSwapIntervalEXT>(swapIntervalPtr);
-                        wglSwapInterval(1);
-                        Logger.Log("Vsync enabled (wglSwapIntervalEXT = 1)");
+                        wglSwapInterval(vsync ? 1 : 0);
+                        Logger.Log($"Vsync {(vsync ? "enabled" : "disabled")} (wglSwapIntervalEXT = {(vsync ? 1 : 0)})");
                     }
                     else
                     {
