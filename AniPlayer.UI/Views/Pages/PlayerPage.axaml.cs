@@ -1,8 +1,11 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Threading;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -18,6 +21,8 @@ public partial class PlayerPage : UserControl
     private string? _currentFile;
     private bool _mpvInitialized;
     private TaskCompletionSource? _mpvReady;
+    private DispatcherTimer? _positionTimer;
+    private bool _isUserSeeking;
 
     public event Action? PlaybackStopped;
 
@@ -25,6 +30,10 @@ public partial class PlayerPage : UserControl
     {
         InitializeComponent();
         AttachedToVisualTree += OnAttachedToVisualTree;
+
+        // Tunnel handlers so we catch pointer events before the slider's internal handling
+        ProgressSlider.AddHandler(PointerPressedEvent, OnSliderPointerPressed, RoutingStrategies.Tunnel);
+        ProgressSlider.AddHandler(PointerReleasedEvent, OnSliderPointerReleased, RoutingStrategies.Tunnel);
     }
 
     private async void OnAttachedToVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
@@ -192,6 +201,9 @@ public partial class PlayerPage : UserControl
         PlaceholderText.IsVisible = false;
         NowPlayingText.Text = _currentFile;
         StatusText.Text = "Playing";
+        PlayPauseButton.Content = "Pause";
+
+        StartPositionTimer();
 
         await Task.Delay(500);
         PollMpvEvents();
@@ -325,10 +337,91 @@ public partial class PlayerPage : UserControl
         }
     }
 
+    // ── Seek bar ─────────────────────────────────────────────
+
+    private void StartPositionTimer()
+    {
+        _positionTimer?.Stop();
+        _positionTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
+        _positionTimer.Tick += OnPositionTimerTick;
+        _positionTimer.Start();
+    }
+
+    private void StopPositionTimer()
+    {
+        _positionTimer?.Stop();
+        _positionTimer = null;
+    }
+
+    private void OnPositionTimerTick(object? sender, EventArgs e)
+    {
+        if (_mpvHandle == IntPtr.Zero || !_mpvInitialized || _isUserSeeking) return;
+
+        var posStr = GetMpvPropertyString("time-pos");
+        var durStr = GetMpvPropertyString("duration");
+
+        if (double.TryParse(posStr, NumberStyles.Float, CultureInfo.InvariantCulture, out var pos)
+            && double.TryParse(durStr, NumberStyles.Float, CultureInfo.InvariantCulture, out var dur)
+            && dur > 0)
+        {
+            ProgressSlider.Maximum = dur;
+            ProgressSlider.Value = pos;
+            TimeCurrentText.Text = FormatTime(pos);
+            TimeTotalText.Text = FormatTime(dur);
+        }
+    }
+
+    private void OnSliderPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        _isUserSeeking = true;
+    }
+
+    private void OnSliderPointerReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        if (_isUserSeeking)
+        {
+            _isUserSeeking = false;
+            SeekAbsolute(ProgressSlider.Value);
+        }
+    }
+
+    private void SeekAbsolute(double seconds)
+    {
+        if (_mpvHandle == IntPtr.Zero) return;
+        var cmd = new[]
+        {
+            Marshal.StringToHGlobalAnsi("seek"),
+            Marshal.StringToHGlobalAnsi(seconds.ToString("F1", CultureInfo.InvariantCulture)),
+            Marshal.StringToHGlobalAnsi("absolute"),
+            IntPtr.Zero
+        };
+        int result = LibMpvInterop.mpv_command(_mpvHandle, cmd);
+        Logger.Log($"Seek to {seconds:F1}s: {result}");
+        foreach (var ptr in cmd)
+            if (ptr != IntPtr.Zero) Marshal.FreeHGlobal(ptr);
+    }
+
+    private string? GetMpvPropertyString(string name)
+    {
+        var ptr = LibMpvInterop.mpv_get_property_string(_mpvHandle, Encoding.UTF8.GetBytes(name + "\0"));
+        if (ptr == IntPtr.Zero) return null;
+        var val = Marshal.PtrToStringAnsi(ptr);
+        LibMpvInterop.mpv_free(ptr);
+        return val;
+    }
+
+    private static string FormatTime(double seconds)
+    {
+        var ts = TimeSpan.FromSeconds(Math.Max(seconds, 0));
+        return ts.Hours > 0 ? ts.ToString(@"h\:mm\:ss") : ts.ToString(@"m\:ss");
+    }
+
     // ── Cleanup ──────────────────────────────────────────────
 
     private async Task CleanupCurrentFileAsync()
     {
+        StopPositionTimer();
+
         if (_lockStream != null)
         {
             await _lockStream.DisposeAsync();
@@ -353,6 +446,10 @@ public partial class PlayerPage : UserControl
         AudioTracksPanel.Children.Clear();
         PlaceholderText.IsVisible = true;
         PlayPauseButton.Content = "Play";
+        ProgressSlider.Value = 0;
+        ProgressSlider.Maximum = 100;
+        TimeCurrentText.Text = "0:00";
+        TimeTotalText.Text = "0:00";
     }
 
     // ── Event polling ────────────────────────────────────────
