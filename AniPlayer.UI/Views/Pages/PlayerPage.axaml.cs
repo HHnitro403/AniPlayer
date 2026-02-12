@@ -240,6 +240,17 @@ public partial class PlayerPage : UserControl
 
     // ── Transport controls ───────────────────────────────────
 
+    public void PausePlayback()
+    {
+        if (_mpvHandle == IntPtr.Zero || !_mpvInitialized || _currentFile == null) return;
+        LibMpvInterop.mpv_set_property_string(
+            _mpvHandle,
+            Encoding.UTF8.GetBytes("pause\0"),
+            Encoding.UTF8.GetBytes("yes\0"));
+        PlayPauseButton.Content = "Play";
+        StatusText.Text = "Paused";
+    }
+
     private void PlayPauseButton_Click(object? sender, RoutedEventArgs e)
     {
         if (_mpvHandle == IntPtr.Zero || !_mpvInitialized) return;

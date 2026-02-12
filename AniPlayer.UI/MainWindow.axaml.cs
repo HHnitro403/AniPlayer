@@ -61,6 +61,10 @@ namespace AniPlayer.UI
         {
             Logger.Log($"NavigateTo: {page}");
 
+            // Pause playback when navigating away from the player
+            if (page != "Player" && PageHost.Content == _playerPage)
+                _playerPage.PausePlayback();
+
             PageHost.Content = page switch
             {
                 "Home"     => _homePage,
