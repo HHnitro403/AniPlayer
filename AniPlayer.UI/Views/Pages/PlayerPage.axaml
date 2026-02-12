@@ -6,9 +6,9 @@
              mc:Ignorable="d" d:DesignWidth="960" d:DesignHeight="600"
              x:Class="AniPlayer.UI.PlayerPage">
 
-    <Grid x:Name="RootGrid">
+    <Grid x:Name="RootGrid" RowDefinitions="*,Auto">
 
-        <!-- Video area (fills everything) -->
+        <!-- Video area -->
         <Grid x:Name="VideoContainer" Background="Black">
             <local:VideoHost x:Name="VideoHostControl"/>
             <TextBlock x:Name="PlaceholderText"
@@ -20,10 +20,10 @@
                        TextAlignment="Center"/>
         </Grid>
 
-        <!-- Controls float over the video at the bottom -->
+        <!-- Controls bar below the video -->
         <Border x:Name="ControlsBar"
-                VerticalAlignment="Bottom"
-                Background="#881A1A2E"
+                Grid.Row="1"
+                Background="#1A1A2E"
                 Padding="16,10">
             <StackPanel Spacing="8">
 
