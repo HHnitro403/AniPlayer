@@ -152,11 +152,18 @@ public class ScannerService : IScannerService
             Report($"    FOUND video: {fileName} (ext='{ext}')");
 
             var episodeNumber = EpisodeParser.ParseEpisodeNumber(file);
-            var title = EpisodeParser.ParseTitle(file);
+            var title = EpisodeParser.ParseEpisodeTitle(file) ?? EpisodeParser.ParseTitle(file);
 
             // Try to detect type from filename (e.g. "Nced-1.mkv" in an Extra folder)
-            // If the filename contains a type keyword, use that instead of folder type
-            var fileType = EpisodeTypes.FromFileName(fileName) ?? episodeType;
+            var fileType = EpisodeTypes.FromFileName(fileName);
+            if (fileType == null)
+            {
+                fileType = episodeType; // Fall back to folder type
+            }
+            else if (fileType != episodeType && episodeType != EpisodeTypes.Episode)
+            {
+                Report($"    WARNING: Type mismatch — file suggests '{fileType}', folder suggests '{episodeType}', using file type");
+            }
             Report($"    PARSED: ep={episodeNumber?.ToString() ?? "null"}, title='{title ?? "null"}', type={fileType}");
 
             var epId = await _library.UpsertEpisodeAsync(seriesId, file, title, episodeNumber, fileType);

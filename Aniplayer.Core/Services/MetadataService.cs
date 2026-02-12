@@ -1,6 +1,7 @@
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 using Aniplayer.Core.Constants;
 using Aniplayer.Core.Interfaces;
 using Aniplayer.Core.Models;
@@ -86,10 +87,12 @@ public class MetadataService : IMetadataService
         var series = await _library.GetSeriesByIdAsync(seriesId);
         if (series == null) return;
 
-        var metadata = await SearchAsync(series.FolderName, ct);
+        var searchTitle = CleanTitleForSearch(series.DisplayTitle);
+        var metadata = await SearchAsync(searchTitle, ct);
         if (metadata == null)
         {
-            _logger.LogInformation("No AniList match for '{FolderName}'", series.FolderName);
+            _logger.LogInformation("No AniList match for '{SearchTitle}' (folder: '{FolderName}')",
+                searchTitle, series.FolderName);
             return;
         }
 
@@ -137,6 +140,14 @@ public class MetadataService : IMetadataService
             _logger.LogError(ex, "Failed to download cover from {Url}", imageUrl);
             return null;
         }
+    }
+
+    private static string CleanTitleForSearch(string title)
+    {
+        // Strip common suffixes that break AniList matching
+        var cleaned = Regex.Replace(title, @"\s+(?:Season|Part|Cour|S)\s*\d+$", "", RegexOptions.IgnoreCase);
+        cleaned = Regex.Replace(cleaned, @"\s+\(.*?\)\s*$", ""); // "(Dub)", "(2024)"
+        return cleaned.Trim();
     }
 
     // ── AniList JSON response mapping ────────────────────────────

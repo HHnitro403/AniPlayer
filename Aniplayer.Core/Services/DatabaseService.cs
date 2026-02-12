@@ -37,6 +37,18 @@ public class DatabaseService : IDatabaseService
     public async Task InitializeAsync()
     {
         _logger.LogInformation("DatabaseService.InitializeAsync");
-        await _initializer.InitializeAsync();
+        try
+        {
+            await _initializer.InitializeAsync();
+        }
+        catch (SqliteException ex) when (ex.Message.Contains("malformed"))
+        {
+            _logger.LogCritical("Database corrupted, attempting backup and recreation");
+            var backup = $"{AppConstants.DbPath}.backup-{DateTime.Now:yyyyMMdd-HHmmss}";
+            if (File.Exists(AppConstants.DbPath))
+                File.Move(AppConstants.DbPath, backup);
+            _logger.LogWarning("Backed up corrupted DB to {Path}", backup);
+            await _initializer.InitializeAsync();
+        }
     }
 }

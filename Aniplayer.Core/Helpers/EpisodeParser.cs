@@ -10,12 +10,20 @@ public static class EpisodeParser
 
     private static void Log(string msg) => LogCallback?.Invoke(msg);
 
+    // Cache parsed results to avoid re-parsing the same file multiple times per scan
+    private static readonly Dictionary<string, List<Element>> _parseCache = new();
+
+    public static void ClearCache() => _parseCache.Clear();
+
     /// <summary>
     /// Parses anime filename metadata using AnitomySharp.
-    /// Returns all parsed elements for a given filename.
+    /// Returns all parsed elements for a given filename. Results are cached.
     /// </summary>
     public static List<Element> ParseAll(string filePath)
     {
+        if (_parseCache.TryGetValue(filePath, out var cached))
+            return cached;
+
         var fileName = Path.GetFileName(filePath);
         if (string.IsNullOrEmpty(fileName))
         {
@@ -29,6 +37,7 @@ public static class EpisodeParser
             Log($"[Parser] AnitomySharp parsed '{fileName}' → {results.Count} elements:");
             foreach (var el in results)
                 Log($"[Parser]   {el.Category} = '{el.Value}'");
+            _parseCache[filePath] = results;
             return results;
         }
         catch (Exception ex)
@@ -88,6 +97,44 @@ public static class EpisodeParser
         var resElement = elements.FirstOrDefault(
             e => e.Category == Element.ElementCategory.ElementVideoResolution);
         return resElement?.Value;
+    }
+
+    public static int? ParseSeasonNumber(string filePath)
+    {
+        var elements = ParseAll(filePath);
+        var seasonElement = elements.FirstOrDefault(
+            e => e.Category == Element.ElementCategory.ElementAnimeSeason);
+
+        if (seasonElement != null && int.TryParse(seasonElement.Value, out var num))
+        {
+            Log($"[Parser] Season: '{seasonElement.Value}' → {num}");
+            return num;
+        }
+
+        // Fallback: detect from folder name "S2", "Season 2"
+        var match = Regex.Match(filePath, @"[/\\]S(?:eason\s*)?(\d+)", RegexOptions.IgnoreCase);
+        if (match.Success && int.TryParse(match.Groups[1].Value, out var season))
+        {
+            Log($"[Parser] Fallback season from path: {season}");
+            return season;
+        }
+
+        return null;
+    }
+
+    public static string? ParseEpisodeTitle(string filePath)
+    {
+        var elements = ParseAll(filePath);
+        var titleElement = elements.FirstOrDefault(
+            e => e.Category == Element.ElementCategory.ElementEpisodeTitle);
+
+        if (titleElement != null && !string.IsNullOrWhiteSpace(titleElement.Value))
+        {
+            Log($"[Parser] EpisodeTitle: '{titleElement.Value}'");
+            return titleElement.Value;
+        }
+
+        return null;
     }
 
     // ── Fallback regex parsers ──────────────────────────────

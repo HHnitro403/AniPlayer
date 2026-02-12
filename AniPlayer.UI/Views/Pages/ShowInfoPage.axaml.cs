@@ -6,7 +6,9 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Aniplayer.Core.Constants;
+using Aniplayer.Core.Interfaces;
 using Aniplayer.Core.Models;
+using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -18,6 +20,7 @@ public partial class ShowInfoPage : UserControl
 {
     public event Action? BackRequested;
     public event Action<string>? EpisodePlayRequested;
+    public event Action<int>? MetadataRefreshRequested;
 
     private int _seriesId;
     private List<Episode> _allEpisodes = new();
@@ -160,5 +163,29 @@ public partial class ShowInfoPage : UserControl
     private void BackButton_Click(object? sender, RoutedEventArgs e)
     {
         BackRequested?.Invoke();
+    }
+
+    private async void RefreshMetadata_Click(object? sender, RoutedEventArgs e)
+    {
+        RefreshMetadataButton.IsEnabled = false;
+        RefreshMetadataButton.Content = "Fetching...";
+        try
+        {
+            var metadata = App.Services.GetService<IMetadataService>();
+            if (metadata != null)
+            {
+                await metadata.ApplyMetadataToSeriesAsync(_seriesId);
+                MetadataRefreshRequested?.Invoke(_seriesId);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Log($"[ShowInfoPage] Metadata refresh failed: {ex.Message}", LogRegion.UI);
+        }
+        finally
+        {
+            RefreshMetadataButton.Content = "Refresh Metadata";
+            RefreshMetadataButton.IsEnabled = true;
+        }
     }
 }
