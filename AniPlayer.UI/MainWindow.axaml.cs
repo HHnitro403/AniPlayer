@@ -364,6 +364,7 @@ namespace AniPlayer.UI
                 WindowState = WindowState.Normal;
                 SidebarControl.IsVisible = true;
             }
+            _playerPage.SetFullscreen(_isFullscreen);
             Logger.Log($"Fullscreen: {_isFullscreen}");
         }
 

@@ -23,7 +23,7 @@
         <!-- Controls float over the video at the bottom -->
         <Border x:Name="ControlsBar"
                 VerticalAlignment="Bottom"
-                Background="#CC1A1A2E"
+                Background="#881A1A2E"
                 Padding="16,10">
             <StackPanel Spacing="8">
 

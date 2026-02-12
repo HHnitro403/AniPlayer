@@ -28,6 +28,7 @@ public partial class PlayerPage : UserControl
     private bool _isTransitioning;
     private DispatcherTimer? _controlsHideTimer;
     private bool _mouseOverControls;
+    private bool _isFullscreen;
 
     public event Action? PlaybackStopped;
     public event Action? FullscreenToggleRequested;
@@ -215,7 +216,6 @@ public partial class PlayerPage : UserControl
         PlayPauseButton.Content = "Pause";
 
         StartPositionTimer();
-        ResetControlsHideTimer();
 
         await Task.Delay(500);
         PollMpvEvents();
@@ -529,10 +529,26 @@ public partial class PlayerPage : UserControl
         return ts.Hours > 0 ? ts.ToString(@"h\:mm\:ss") : ts.ToString(@"m\:ss");
     }
 
-    // ── Controls auto-hide ─────────────────────────────────
+    // ── Controls auto-hide (fullscreen only) ───────────────
+
+    public void SetFullscreen(bool fullscreen)
+    {
+        _isFullscreen = fullscreen;
+        if (_isFullscreen)
+        {
+            // Entering fullscreen — start the hide countdown
+            ResetControlsHideTimer();
+        }
+        else
+        {
+            // Leaving fullscreen — stop hiding, ensure controls visible
+            StopControlsHideTimer();
+        }
+    }
 
     private void OnPlayerPointerMoved(object? sender, PointerEventArgs e)
     {
+        if (!_isFullscreen) return;
         ShowControls();
         ResetControlsHideTimer();
     }
@@ -548,8 +564,7 @@ public partial class PlayerPage : UserControl
 
     private void HideControls()
     {
-        // Don't hide if mouse is over the controls, or nothing is playing
-        if (_mouseOverControls || _currentFile == null) return;
+        if (!_isFullscreen || _mouseOverControls || _currentFile == null) return;
         ControlsBar.IsVisible = false;
         Cursor = new Cursor(StandardCursorType.None);
     }
@@ -557,6 +572,7 @@ public partial class PlayerPage : UserControl
     private void ResetControlsHideTimer()
     {
         _controlsHideTimer?.Stop();
+        if (!_isFullscreen) return;
         _controlsHideTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
         _controlsHideTimer.Tick += (_, _) =>
         {
