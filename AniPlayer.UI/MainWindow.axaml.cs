@@ -1,7 +1,10 @@
 using Avalonia.Controls;
+using Avalonia.Input;
 using Microsoft.Extensions.DependencyInjection;
 using Aniplayer.Core.Interfaces;
+using Aniplayer.Core.Models;
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
 using System.Threading.Tasks;
@@ -20,6 +23,9 @@ namespace AniPlayer.UI
         private readonly ILibraryService _libraryService;
         private readonly IScannerService _scannerService;
         private readonly IFolderWatcherService _folderWatcher;
+
+        private List<Episode> _currentEpisodes = new();
+        private bool _isFullscreen;
 
         public MainWindow()
         {
@@ -45,6 +51,7 @@ namespace AniPlayer.UI
             _ = InitializeAsync();
 
             Closing += MainWindow_Closing;
+            KeyDown += OnMainWindowKeyDown;
             Logger.Log("MainWindow constructor completed");
         }
 
@@ -70,6 +77,13 @@ namespace AniPlayer.UI
         public async void PlayFile(string filePath)
         {
             NavigateTo("Player");
+
+            // Pass full episode playlist so auto-next works
+            var files = _currentEpisodes.Select(e => e.FilePath).ToArray();
+            var index = Array.IndexOf(files, filePath);
+            if (index >= 0)
+                _playerPage.SetPlaylist(files, index);
+
             await _playerPage.LoadFileAsync(filePath);
         }
 
@@ -113,7 +127,12 @@ namespace AniPlayer.UI
             };
 
             // PlayerPage
-            _playerPage.PlaybackStopped += () => NavigateTo("Home");
+            _playerPage.PlaybackStopped += () =>
+            {
+                if (_isFullscreen) ToggleFullscreen();
+                NavigateTo("Home");
+            };
+            _playerPage.FullscreenToggleRequested += ToggleFullscreen;
 
             // OptionsPage
             _optionsPage.LibraryFolderAdded += path =>
@@ -233,6 +252,7 @@ namespace AniPlayer.UI
                 }
 
                 var episodes = (await _libraryService.GetEpisodesBySeriesIdAsync(seriesId)).ToList();
+                _currentEpisodes = episodes;
                 Logger.Log($"[OpenSeries] Loaded series '{series.DisplayTitle}' with {episodes.Count} episode(s)");
 
                 _showInfoPage.LoadSeriesData(series, episodes);
@@ -327,6 +347,38 @@ namespace AniPlayer.UI
         {
             await _scannerService.ScanLibraryAsync(libraryId);
             await RefreshPagesAsync();
+        }
+
+        // ── Fullscreen ───────────────────────────────────────────
+
+        private void ToggleFullscreen()
+        {
+            _isFullscreen = !_isFullscreen;
+            if (_isFullscreen)
+            {
+                WindowState = WindowState.FullScreen;
+                SidebarControl.IsVisible = false;
+            }
+            else
+            {
+                WindowState = WindowState.Normal;
+                SidebarControl.IsVisible = true;
+            }
+            Logger.Log($"Fullscreen: {_isFullscreen}");
+        }
+
+        private void OnMainWindowKeyDown(object? sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.Escape && _isFullscreen)
+            {
+                ToggleFullscreen();
+                e.Handled = true;
+            }
+            else if (e.Key == Key.F11 && PageHost.Content == _playerPage)
+            {
+                ToggleFullscreen();
+                e.Handled = true;
+            }
         }
 
         // ── Shutdown ─────────────────────────────────────────────

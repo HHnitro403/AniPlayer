@@ -23,8 +23,12 @@ public partial class PlayerPage : UserControl
     private TaskCompletionSource? _mpvReady;
     private DispatcherTimer? _positionTimer;
     private bool _isUserSeeking;
+    private string[] _playlist = Array.Empty<string>();
+    private int _playlistIndex;
+    private bool _isTransitioning;
 
     public event Action? PlaybackStopped;
+    public event Action? FullscreenToggleRequested;
 
     public PlayerPage()
     {
@@ -243,6 +247,96 @@ public partial class PlayerPage : UserControl
         PlaybackStopped?.Invoke();
     }
 
+    private void NextButton_Click(object? sender, RoutedEventArgs e) => _ = PlayNextInPlaylistAsync();
+
+    private void FullscreenButton_Click(object? sender, RoutedEventArgs e) => FullscreenToggleRequested?.Invoke();
+
+    // ── Playlist / auto-next ────────────────────────────────
+
+    public void SetPlaylist(string[] filePaths, int startIndex)
+    {
+        _playlist = filePaths;
+        _playlistIndex = startIndex;
+        NextButton.IsEnabled = startIndex < filePaths.Length - 1;
+        Logger.Log($"Playlist set: {filePaths.Length} files, starting at index {startIndex}");
+    }
+
+    private async Task PlayNextInPlaylistAsync()
+    {
+        if (_isTransitioning) return;
+        if (_playlistIndex >= _playlist.Length - 1)
+        {
+            Logger.Log("Playlist ended — no more episodes");
+            return;
+        }
+
+        _isTransitioning = true;
+        _playlistIndex++;
+        NextButton.IsEnabled = _playlistIndex < _playlist.Length - 1;
+        Logger.Log($"Playing next: index {_playlistIndex}/{_playlist.Length - 1}");
+
+        await TransitionToFileAsync(_playlist[_playlistIndex]);
+        _isTransitioning = false;
+    }
+
+    /// <summary>
+    /// Seamless file transition — sends loadfile directly without stopping,
+    /// so mpv transitions from one episode to the next without a visible gap.
+    /// </summary>
+    private async Task TransitionToFileAsync(string filePath)
+    {
+        Logger.Log($"=== TransitionToFileAsync: {filePath} ===");
+
+        if (!File.Exists(filePath))
+        {
+            Logger.LogError($"Next file not found: {filePath}");
+            return;
+        }
+
+        // Release previous file lock
+        if (_lockStream != null)
+        {
+            await _lockStream.DisposeAsync();
+            _lockStream = null;
+        }
+
+        _currentFile = Path.GetFileName(filePath);
+
+        // Send loadfile directly — mpv transitions seamlessly without stopping
+        var cmd = new[]
+        {
+            Marshal.StringToHGlobalAnsi("loadfile"),
+            Marshal.StringToHGlobalAnsi(filePath),
+            IntPtr.Zero
+        };
+        int cmdResult = LibMpvInterop.mpv_command(_mpvHandle, cmd);
+        Logger.Log($"mpv_command(loadfile transition): {cmdResult}");
+
+        foreach (var ptr in cmd)
+            if (ptr != IntPtr.Zero) Marshal.FreeHGlobal(ptr);
+
+        // Unpause in case it was paused at EOF by keep-open
+        LibMpvInterop.mpv_set_property_string(
+            _mpvHandle,
+            Encoding.UTF8.GetBytes("pause\0"),
+            Encoding.UTF8.GetBytes("no\0"));
+
+        // New file lock
+        _lockStream = new FileStream(
+            filePath, FileMode.Open, FileAccess.Read,
+            FileShare.Read, bufferSize: 1, FileOptions.Asynchronous);
+
+        NowPlayingText.Text = _currentFile;
+        StatusText.Text = "Playing";
+        PlayPauseButton.Content = "Pause";
+
+        // Update audio tracks after the new file loads
+        await Task.Delay(1500);
+        await UpdateAudioTracksAsync();
+
+        Logger.Log("=== TransitionToFileAsync END ===");
+    }
+
     // ── Audio tracks (moved from MainWindow) ─────────────────
 
     private async Task UpdateAudioTracksAsync()
@@ -355,7 +449,18 @@ public partial class PlayerPage : UserControl
 
     private void OnPositionTimerTick(object? sender, EventArgs e)
     {
-        if (_mpvHandle == IntPtr.Zero || !_mpvInitialized || _isUserSeeking) return;
+        if (_mpvHandle == IntPtr.Zero || !_mpvInitialized) return;
+
+        // Check if playback reached EOF (keep-open pauses at end)
+        var eofReached = GetMpvPropertyString("eof-reached");
+        if (eofReached == "yes" && !_isTransitioning && _playlistIndex < _playlist.Length - 1)
+        {
+            Logger.Log("EOF reached — auto-playing next episode");
+            _ = PlayNextInPlaylistAsync();
+            return;
+        }
+
+        if (_isUserSeeking) return;
 
         var posStr = GetMpvPropertyString("time-pos");
         var durStr = GetMpvPropertyString("duration");
