@@ -40,6 +40,8 @@ public partial class PlayerPage : UserControl
         {
             // MPV already created but renderer was disposed when we navigated away.
             // Re-attach the renderer to the new native control.
+            // Reset _mpvReady so LoadFileAsync waits for the renderer before sending loadfile.
+            _mpvReady = new TaskCompletionSource();
             Logger.Log("PlayerPage re-attached — re-initializing renderer for new native handle");
             await Task.Delay(500);
             if (VideoHostControl.NativeHandle != IntPtr.Zero)
@@ -51,6 +53,7 @@ public partial class PlayerPage : UserControl
             {
                 Logger.Log("WARNING: NativeHandle still zero after delay, renderer not re-initialized");
             }
+            _mpvReady.TrySetResult();
         }
     }
 
@@ -135,10 +138,10 @@ public partial class PlayerPage : UserControl
     {
         Logger.Log($"=== LoadFileAsync: {filePath} ===");
 
-        // Wait for MPV init if it's still in progress
-        if (!_mpvInitialized && _mpvReady != null)
+        // Wait for MPV/renderer init if it's still in progress (first init or re-attach)
+        if (_mpvReady != null && !_mpvReady.Task.IsCompleted)
         {
-            Logger.Log("Waiting for MPV initialization to complete...");
+            Logger.Log("Waiting for MPV/renderer initialization to complete...");
             await _mpvReady.Task;
         }
 
@@ -255,7 +258,21 @@ public partial class PlayerPage : UserControl
                     var id = track.GetProperty("id").GetInt32();
                     var lang = track.TryGetProperty("lang", out var l) ? l.GetString() : null;
                     var title = track.TryGetProperty("title", out var t) ? t.GetString() : null;
-                    audioTracks.Add((id, lang ?? title ?? $"Track {id}"));
+
+                    // Build a descriptive label combining lang + title when available
+                    string label;
+                    if (!string.IsNullOrEmpty(lang) && !string.IsNullOrEmpty(title)
+                        && !string.Equals(lang, title, StringComparison.OrdinalIgnoreCase))
+                        label = $"{lang} — {title}";
+                    else if (!string.IsNullOrEmpty(title))
+                        label = title;
+                    else if (!string.IsNullOrEmpty(lang))
+                        label = lang;
+                    else
+                        label = $"Track {id}";
+
+                    Logger.Log($"Audio track {id}: lang={lang}, title={title} → \"{label}\"");
+                    audioTracks.Add((id, label));
                 }
             }
 
