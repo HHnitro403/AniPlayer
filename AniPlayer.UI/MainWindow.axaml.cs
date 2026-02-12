@@ -23,6 +23,7 @@ namespace AniPlayer.UI
         private readonly ILibraryService _libraryService;
         private readonly IScannerService _scannerService;
         private readonly IFolderWatcherService _folderWatcher;
+        private readonly IWatchProgressService _watchProgressService;
 
         private List<Episode> _currentEpisodes = new();
         private bool _isFullscreen;
@@ -33,9 +34,10 @@ namespace AniPlayer.UI
             InitializeComponent();
 
             // Resolve services from DI container
-            _libraryService = App.Services.GetRequiredService<ILibraryService>();
-            _scannerService = App.Services.GetRequiredService<IScannerService>();
-            _folderWatcher  = App.Services.GetRequiredService<IFolderWatcherService>();
+            _libraryService       = App.Services.GetRequiredService<ILibraryService>();
+            _scannerService       = App.Services.GetRequiredService<IScannerService>();
+            _folderWatcher        = App.Services.GetRequiredService<IFolderWatcherService>();
+            _watchProgressService = App.Services.GetRequiredService<IWatchProgressService>();
 
             // Create pages once — PlayerPage holds the mpv instance for its lifetime
             _homePage = new HomePage();
@@ -117,6 +119,11 @@ namespace AniPlayer.UI
             {
                 Logger.Log($"[MainWindow] HomePage.SeriesSelected: ID={id}");
                 _ = OpenSeriesAsync(id);
+            };
+            _homePage.ResumeEpisodeRequested += id =>
+            {
+                Logger.Log($"[MainWindow] ResumeEpisodeRequested: episode ID={id}");
+                _ = ResumeEpisodeAsync(id);
             };
 
             // LibraryPage
@@ -277,6 +284,39 @@ namespace AniPlayer.UI
             }
         }
 
+        private async Task ResumeEpisodeAsync(int episodeId)
+        {
+            try
+            {
+                // Look up the episode, load its series episodes for playlist, then play
+                var allSeries = await _libraryService.GetAllSeriesAsync();
+                Episode? target = null;
+                foreach (var s in allSeries)
+                {
+                    var eps = (await _libraryService.GetEpisodesBySeriesIdAsync(s.Id)).ToList();
+                    target = eps.FirstOrDefault(e => e.Id == episodeId);
+                    if (target != null)
+                    {
+                        _currentEpisodes = eps;
+                        Logger.Log($"[ResumeEpisode] Found episode {episodeId} in series '{s.DisplayTitle}', {eps.Count} episodes");
+                        break;
+                    }
+                }
+
+                if (target == null)
+                {
+                    Logger.Log($"[ResumeEpisode] Episode {episodeId} not found");
+                    return;
+                }
+
+                PlayFile(target.FilePath);
+            }
+            catch (Exception ex)
+            {
+                Logger.Log($"[ResumeEpisode] Failed: {ex.Message}");
+            }
+        }
+
         // ── Data refresh ────────────────────────────────────────
 
         private async Task RefreshPagesAsync()
@@ -308,9 +348,22 @@ namespace AniPlayer.UI
                 var recentSeries = (await _libraryService.GetRecentlyAddedSeriesAsync(14)).ToList();
                 Logger.Log($"[RefreshPages] Recently added (14 days): {recentSeries.Count} series");
 
+                // Fetch continue-watching data
+                var recentlyWatched = (await _watchProgressService.GetRecentlyWatchedAsync(10)).ToList();
+                Logger.Log($"[RefreshPages] Recently watched: {recentlyWatched.Count} episodes");
+
+                // Build series lookup for cover images
+                var seriesLookup = allSeries.ToDictionary(s => s.Id);
+                var continueItems = recentlyWatched.Select(rw =>
+                {
+                    seriesLookup.TryGetValue(rw.Episode.SeriesId, out var series);
+                    return (rw.Episode, rw.Progress, Series: series);
+                }).ToList();
+
                 // Push data to pages
                 _optionsPage.DisplayLibraries(libraries);
                 _libraryPage.DisplaySeries(allSeries);
+                _homePage.DisplayContinueWatching(continueItems);
                 _homePage.DisplayRecentlyAdded(recentSeries);
                 _homePage.SetHasLibraries(libraries.Count > 0);
 
