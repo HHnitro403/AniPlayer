@@ -551,21 +551,9 @@ public partial class PlayerPage : UserControl
                 if (pref != null)
                 {
                     Logger.Log($"Series {_currentSeriesId} preferred audio: lang={pref.PreferredAudioLanguage}, title={pref.PreferredAudioTitle}");
+                    var match = MatchPreferredAudioTrack(audioTracks, pref.PreferredAudioLanguage, pref.PreferredAudioTitle);
 
-                    // Match by title first (handles mislabeled tracks like Judas encodes)
-                    // then fall back to language-only matching
-                    var match = (!string.IsNullOrEmpty(pref.PreferredAudioTitle)
-                        ? audioTracks.FirstOrDefault(t =>
-                            string.Equals(t.title, pref.PreferredAudioTitle, StringComparison.OrdinalIgnoreCase))
-                        : default);
-
-                    if (match.title == null && !string.IsNullOrEmpty(pref.PreferredAudioLanguage))
-                    {
-                        match = audioTracks.FirstOrDefault(t =>
-                            string.Equals(t.lang, pref.PreferredAudioLanguage, StringComparison.OrdinalIgnoreCase));
-                    }
-
-                    if (match.title != null || match.lang != null)
+                    if (match.id > 0)
                     {
                         Logger.Log($"Auto-selecting preferred audio track {match.id} (title={match.title}, lang={match.lang})");
                         LibMpvInterop.mpv_set_property_string(
@@ -610,6 +598,109 @@ public partial class PlayerPage : UserControl
         {
             Logger.LogError("UpdateAudioTracks", ex);
         }
+    }
+
+    /// <summary>
+    /// Multi-pass matching for audio track preference across inconsistently-labeled files.
+    /// Pass 1: exact title match
+    /// Pass 2: exact lang match
+    /// Pass 3: normalized language match (jpn=ja=japanese, eng=en=english, etc.)
+    /// Pass 4: keyword match in title (e.g. saved "Japanese" matches title "Japanese 2.0 Stereo")
+    /// </summary>
+    private static (int id, string? lang, string? title) MatchPreferredAudioTrack(
+        List<(int id, string label, string? lang, string? title)> tracks,
+        string? prefLang, string? prefTitle)
+    {
+        // Pass 1: exact title
+        if (!string.IsNullOrEmpty(prefTitle))
+        {
+            var m = tracks.FirstOrDefault(t =>
+                string.Equals(t.title, prefTitle, StringComparison.OrdinalIgnoreCase));
+            if (m.title != null) return (m.id, m.lang, m.title);
+        }
+
+        // Pass 2: exact lang
+        if (!string.IsNullOrEmpty(prefLang))
+        {
+            var m = tracks.FirstOrDefault(t =>
+                string.Equals(t.lang, prefLang, StringComparison.OrdinalIgnoreCase));
+            if (m.lang != null) return (m.id, m.lang, m.title);
+        }
+
+        // Pass 3: normalized language (jpn/ja/japanese all → "ja", eng/en/english → "en", etc.)
+        var normPrefLang = NormalizeLanguage(prefLang);
+        var normPrefTitle = NormalizeLanguage(prefTitle);
+        var normKey = normPrefLang ?? normPrefTitle;
+        if (normKey != null)
+        {
+            var m = tracks.FirstOrDefault(t =>
+                NormalizeLanguage(t.lang) == normKey || NormalizeLanguage(t.title) == normKey);
+            if (m.id > 0) return (m.id, m.lang, m.title);
+        }
+
+        // Pass 4: keyword / contains match on title
+        if (!string.IsNullOrEmpty(prefTitle))
+        {
+            var m = tracks.FirstOrDefault(t =>
+                t.title != null && t.title.Contains(prefTitle, StringComparison.OrdinalIgnoreCase));
+            if (m.title != null) return (m.id, m.lang, m.title);
+
+            // Reverse: saved title is substring of track title or vice versa
+            m = tracks.FirstOrDefault(t =>
+                t.title != null && prefTitle.Contains(t.title, StringComparison.OrdinalIgnoreCase));
+            if (m.title != null) return (m.id, m.lang, m.title);
+        }
+
+        return default;
+    }
+
+    private static readonly Dictionary<string, string> LanguageAliases = new(StringComparer.OrdinalIgnoreCase)
+    {
+        // Japanese
+        ["jpn"] = "ja", ["ja"] = "ja", ["japanese"] = "ja", ["日本語"] = "ja", ["jp"] = "ja",
+        // English
+        ["eng"] = "en", ["en"] = "en", ["english"] = "en",
+        // Chinese
+        ["zho"] = "zh", ["zh"] = "zh", ["chi"] = "zh", ["chinese"] = "zh",
+        ["cmn"] = "zh", ["mandarin"] = "zh",
+        // Korean
+        ["kor"] = "ko", ["ko"] = "ko", ["korean"] = "ko",
+        // Spanish
+        ["spa"] = "es", ["es"] = "es", ["spanish"] = "es", ["español"] = "es",
+        // French
+        ["fre"] = "fr", ["fra"] = "fr", ["fr"] = "fr", ["french"] = "fr", ["français"] = "fr",
+        // German
+        ["ger"] = "de", ["deu"] = "de", ["de"] = "de", ["german"] = "de", ["deutsch"] = "de",
+        // Portuguese
+        ["por"] = "pt", ["pt"] = "pt", ["portuguese"] = "pt",
+        // Italian
+        ["ita"] = "it", ["it"] = "it", ["italian"] = "it",
+        // Russian
+        ["rus"] = "ru", ["ru"] = "ru", ["russian"] = "ru",
+        // Arabic
+        ["ara"] = "ar", ["ar"] = "ar", ["arabic"] = "ar",
+        // Hindi
+        ["hin"] = "hi", ["hi"] = "hi", ["hindi"] = "hi",
+        // Thai
+        ["tha"] = "th", ["th"] = "th", ["thai"] = "th",
+        // Vietnamese
+        ["vie"] = "vi", ["vi"] = "vi", ["vietnamese"] = "vi",
+        // Indonesian / Malay
+        ["ind"] = "id", ["id"] = "id", ["indonesian"] = "id",
+        ["msa"] = "ms", ["ms"] = "ms", ["malay"] = "ms",
+        // Latin American Spanish
+        ["lat"] = "es-la", ["latino"] = "es-la", ["latin spanish"] = "es-la",
+        // Brazilian Portuguese
+        ["pt-br"] = "pt-br", ["brazilian"] = "pt-br",
+        // Undefined / undetermined
+        ["und"] = "und", ["undetermined"] = "und",
+    };
+
+    private static string? NormalizeLanguage(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        var trimmed = value.Trim();
+        return LanguageAliases.TryGetValue(trimmed, out var norm) ? norm : null;
     }
 
     private void SwitchAudioTrack(int trackId)
