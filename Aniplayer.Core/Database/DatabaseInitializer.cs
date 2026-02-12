@@ -60,6 +60,14 @@ public class DatabaseInitializer
                 "ALTER TABLE TrackPreferences ADD COLUMN preferred_audio_title TEXT;").ConfigureAwait(false);
         }
         catch (SqliteException) { /* column already exists — safe to ignore */ }
+
+        // Add preferred_audio_track_id column (mpv track number — most reliable for same-encode series)
+        try
+        {
+            await connection.ExecuteAsync(
+                "ALTER TABLE TrackPreferences ADD COLUMN preferred_audio_track_id INTEGER;").ConfigureAwait(false);
+        }
+        catch (SqliteException) { /* column already exists — safe to ignore */ }
     }
 
     private static class Schema

@@ -550,8 +550,8 @@ public partial class PlayerPage : UserControl
                 var pref = await _libraryService.GetSeriesTrackPreferenceAsync(_currentSeriesId);
                 if (pref != null)
                 {
-                    Logger.Log($"Series {_currentSeriesId} preferred audio: lang={pref.PreferredAudioLanguage}, title={pref.PreferredAudioTitle}");
-                    var match = MatchPreferredAudioTrack(audioTracks, pref.PreferredAudioLanguage, pref.PreferredAudioTitle);
+                    Logger.Log($"Series {_currentSeriesId} preferred audio: trackId={pref.PreferredAudioTrackId}, lang={pref.PreferredAudioLanguage}, title={pref.PreferredAudioTitle}");
+                    var match = MatchPreferredAudioTrack(audioTracks, pref.PreferredAudioLanguage, pref.PreferredAudioTitle, pref.PreferredAudioTrackId);
 
                     if (match.id > 0)
                     {
@@ -602,6 +602,7 @@ public partial class PlayerPage : UserControl
 
     /// <summary>
     /// Multi-pass matching for audio track preference across inconsistently-labeled files.
+    /// Pass 0: track ID match (most reliable — same position in same encode)
     /// Pass 1: exact title match
     /// Pass 2: exact lang match
     /// Pass 3: normalized language match (jpn=ja=japanese, eng=en=english, etc.)
@@ -609,8 +610,16 @@ public partial class PlayerPage : UserControl
     /// </summary>
     private static (int id, string? lang, string? title) MatchPreferredAudioTrack(
         List<(int id, string label, string? lang, string? title)> tracks,
-        string? prefLang, string? prefTitle)
+        string? prefLang, string? prefTitle, int? prefTrackId = null)
     {
+        // Pass 0: track ID (mpv track number — most reliable for same-encode series
+        // where someone mislabeled both tracks as the same language)
+        if (prefTrackId.HasValue && prefTrackId.Value > 0)
+        {
+            var m = tracks.FirstOrDefault(t => t.id == prefTrackId.Value);
+            if (m.id > 0) return (m.id, m.lang, m.title);
+        }
+
         // Pass 1: exact title
         if (!string.IsNullOrEmpty(prefTitle))
         {
@@ -719,13 +728,13 @@ public partial class PlayerPage : UserControl
                     : Avalonia.Media.FontWeight.Normal;
         }
 
-        // Persist the language + title choice for this series
+        // Persist the language + title + track ID choice for this series
         if (_currentSeriesId > 0 && _libraryService != null
             && _audioTrackInfo.TryGetValue(trackId, out var info))
         {
             var lang = info.lang ?? "";
-            Logger.Log($"Saving audio preference for series {_currentSeriesId}: lang={lang}, title={info.title}");
-            _ = _libraryService.UpsertSeriesAudioPreferenceAsync(_currentSeriesId, lang, info.title);
+            Logger.Log($"Saving audio preference for series {_currentSeriesId}: trackId={trackId}, lang={lang}, title={info.title}");
+            _ = _libraryService.UpsertSeriesAudioPreferenceAsync(_currentSeriesId, lang, info.title, trackId);
         }
     }
 

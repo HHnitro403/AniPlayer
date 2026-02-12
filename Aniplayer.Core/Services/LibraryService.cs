@@ -163,11 +163,11 @@ public class LibraryService : ILibraryService
             Queries.GetTrackPreferencesBySeriesId, new { seriesId });
     }
 
-    public async Task UpsertSeriesAudioPreferenceAsync(int seriesId, string audioLanguage, string? audioTitle)
+    public async Task UpsertSeriesAudioPreferenceAsync(int seriesId, string audioLanguage, string? audioTitle, int? audioTrackId = null)
     {
         using var conn = _db.CreateConnection();
         await conn.ExecuteAsync(
             Queries.UpsertSeriesTrackPreference,
-            new { seriesId, audioLang = audioLanguage, audioTitle, subLang = (string?)null, subName = (string?)null });
+            new { seriesId, audioLang = audioLanguage, audioTitle, audioTrackId, subLang = (string?)null, subName = (string?)null });
     }
 }

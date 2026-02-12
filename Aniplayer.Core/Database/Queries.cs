@@ -185,6 +185,7 @@ public static class Queries
         SELECT id AS Id, episode_id AS EpisodeId, series_id AS SeriesId,
                preferred_audio_language AS PreferredAudioLanguage,
                preferred_audio_title AS PreferredAudioTitle,
+               preferred_audio_track_id AS PreferredAudioTrackId,
                preferred_subtitle_language AS PreferredSubtitleLanguage,
                preferred_subtitle_name AS PreferredSubtitleName
         FROM TrackPreferences WHERE episode_id = @episodeId";
@@ -193,6 +194,7 @@ public static class Queries
         SELECT id AS Id, episode_id AS EpisodeId, series_id AS SeriesId,
                preferred_audio_language AS PreferredAudioLanguage,
                preferred_audio_title AS PreferredAudioTitle,
+               preferred_audio_track_id AS PreferredAudioTrackId,
                preferred_subtitle_language AS PreferredSubtitleLanguage,
                preferred_subtitle_name AS PreferredSubtitleName
         FROM TrackPreferences WHERE series_id = @seriesId AND episode_id IS NULL";
@@ -207,11 +209,12 @@ public static class Queries
             preferred_subtitle_name     = excluded.preferred_subtitle_name";
 
     public const string UpsertSeriesTrackPreference = @"
-        INSERT INTO TrackPreferences (series_id, preferred_audio_language, preferred_audio_title, preferred_subtitle_language, preferred_subtitle_name)
-        VALUES (@seriesId, @audioLang, @audioTitle, @subLang, @subName)
+        INSERT INTO TrackPreferences (series_id, preferred_audio_language, preferred_audio_title, preferred_audio_track_id, preferred_subtitle_language, preferred_subtitle_name)
+        VALUES (@seriesId, @audioLang, @audioTitle, @audioTrackId, @subLang, @subName)
         ON CONFLICT(series_id) WHERE series_id IS NOT NULL AND episode_id IS NULL DO UPDATE SET
             preferred_audio_language    = excluded.preferred_audio_language,
             preferred_audio_title       = excluded.preferred_audio_title,
+            preferred_audio_track_id   = excluded.preferred_audio_track_id,
             preferred_subtitle_language = excluded.preferred_subtitle_language,
             preferred_subtitle_name     = excluded.preferred_subtitle_name";
 

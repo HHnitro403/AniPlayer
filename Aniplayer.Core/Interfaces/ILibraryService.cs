@@ -32,5 +32,5 @@ public interface ILibraryService
 
     // Track Preferences
     Task<TrackPreferences?> GetSeriesTrackPreferenceAsync(int seriesId);
-    Task UpsertSeriesAudioPreferenceAsync(int seriesId, string audioLanguage, string? audioTitle);
+    Task UpsertSeriesAudioPreferenceAsync(int seriesId, string audioLanguage, string? audioTitle, int? audioTrackId = null);
 }
