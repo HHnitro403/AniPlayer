@@ -26,6 +26,8 @@ public partial class PlayerPage : UserControl
     private string[] _playlist = Array.Empty<string>();
     private int _playlistIndex;
     private bool _isTransitioning;
+    private DispatcherTimer? _controlsHideTimer;
+    private bool _mouseOverControls;
 
     public event Action? PlaybackStopped;
     public event Action? FullscreenToggleRequested;
@@ -38,6 +40,11 @@ public partial class PlayerPage : UserControl
         // Tunnel handlers so we catch pointer events before the slider's internal handling
         ProgressSlider.AddHandler(PointerPressedEvent, OnSliderPointerPressed, RoutingStrategies.Tunnel);
         ProgressSlider.AddHandler(PointerReleasedEvent, OnSliderPointerReleased, RoutingStrategies.Tunnel);
+
+        // Auto-hide controls: mouse move anywhere shows them, 5s idle hides them
+        RootGrid.PointerMoved += OnPlayerPointerMoved;
+        ControlsBar.PointerEntered += (_, _) => _mouseOverControls = true;
+        ControlsBar.PointerExited += (_, _) => { _mouseOverControls = false; ResetControlsHideTimer(); };
     }
 
     private async void OnAttachedToVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
@@ -208,6 +215,7 @@ public partial class PlayerPage : UserControl
         PlayPauseButton.Content = "Pause";
 
         StartPositionTimer();
+        ResetControlsHideTimer();
 
         await Task.Delay(500);
         PollMpvEvents();
@@ -521,11 +529,56 @@ public partial class PlayerPage : UserControl
         return ts.Hours > 0 ? ts.ToString(@"h\:mm\:ss") : ts.ToString(@"m\:ss");
     }
 
+    // ── Controls auto-hide ─────────────────────────────────
+
+    private void OnPlayerPointerMoved(object? sender, PointerEventArgs e)
+    {
+        ShowControls();
+        ResetControlsHideTimer();
+    }
+
+    private void ShowControls()
+    {
+        if (!ControlsBar.IsVisible)
+        {
+            ControlsBar.IsVisible = true;
+            Cursor = Cursor.Default;
+        }
+    }
+
+    private void HideControls()
+    {
+        // Don't hide if mouse is over the controls, or nothing is playing
+        if (_mouseOverControls || _currentFile == null) return;
+        ControlsBar.IsVisible = false;
+        Cursor = new Cursor(StandardCursorType.None);
+    }
+
+    private void ResetControlsHideTimer()
+    {
+        _controlsHideTimer?.Stop();
+        _controlsHideTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
+        _controlsHideTimer.Tick += (_, _) =>
+        {
+            _controlsHideTimer?.Stop();
+            HideControls();
+        };
+        _controlsHideTimer.Start();
+    }
+
+    private void StopControlsHideTimer()
+    {
+        _controlsHideTimer?.Stop();
+        _controlsHideTimer = null;
+        ShowControls();
+    }
+
     // ── Cleanup ──────────────────────────────────────────────
 
     private async Task CleanupCurrentFileAsync()
     {
         StopPositionTimer();
+        StopControlsHideTimer();
 
         if (_lockStream != null)
         {
