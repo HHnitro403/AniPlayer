@@ -797,6 +797,12 @@ public partial class PlayerPage : UserControl
     private async void OnPositionTimerTick(object? sender, EventArgs e)
     {
         if (_mpvHandle == IntPtr.Zero || !_mpvInitialized) return;
+
+        // Drain the mpv event queue every tick (~250ms) so it doesn't fill up
+        // and cause stalls after extended playback. Runs before the tick-in-progress
+        // guard because it's lightweight (timeout=0) and must always execute.
+        PollMpvEvents();
+
         if (_tickInProgress) return; // skip if previous tick is still running
         _tickInProgress = true;
 

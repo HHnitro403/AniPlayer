@@ -271,13 +271,10 @@ namespace AniPlayer.UI
 
         private void OnMpvRenderUpdate(IntPtr ctx)
         {
-            // Called from mpv thread — check if a new frame is actually available
+            // Called from mpv's background thread — do NOT call any mpv render API here.
+            // Just signal the UI thread to check for a new frame in Render().
             try
             {
-                ulong flags = LibMpvRenderInterop.mpv_render_context_update(_renderContext);
-                if ((flags & LibMpvRenderInterop.MPV_RENDER_UPDATE_FRAME) == 0)
-                    return;
-
                 Dispatcher.UIThread.Post(() => RenderNeeded?.Invoke());
             }
             catch (Exception ex)
@@ -293,6 +290,12 @@ namespace AniPlayer.UI
 
             try
             {
+                // Check if mpv actually has a new frame ready (moved here from the
+                // background callback to avoid a threading race with UI-thread seeks).
+                ulong flags = LibMpvRenderInterop.mpv_render_context_update(_renderContext);
+                if ((flags & LibMpvRenderInterop.MPV_RENDER_UPDATE_FRAME) == 0)
+                    return; // no new frame — skip the expensive GL render
+
                 // Make context current (skip if already current to avoid driver overhead)
                 if (OpenGLInterop.wglGetCurrentContext() != _glContext)
                     OpenGLInterop.wglMakeCurrent(_deviceContext, _glContext);
