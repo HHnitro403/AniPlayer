@@ -84,14 +84,18 @@ namespace AniPlayer.UI
 
             // Pass full episode playlist so auto-next works
             var files = _currentEpisodes.Select(e => e.FilePath).ToArray();
+            var episodeIds = _currentEpisodes.Select(e => e.Id).ToArray();
             var index = Array.IndexOf(files, filePath);
             if (index >= 0)
-                _playerPage.SetPlaylist(files, index);
+                _playerPage.SetPlaylist(files, index, episodeIds);
 
             // Pass series context so the player can read/save audio track preferences
             var episode = _currentEpisodes.FirstOrDefault(e => e.FilePath == filePath);
             if (episode != null)
+            {
                 _playerPage.SetSeriesContext(episode.SeriesId, _libraryService);
+                _playerPage.SetEpisodeContext(episode.Id);
+            }
 
             await _playerPage.LoadFileAsync(filePath);
         }
@@ -387,6 +391,10 @@ namespace AniPlayer.UI
             else if (e.Key == Key.F11 && PageHost.Content == _playerPage)
             {
                 ToggleFullscreen();
+                e.Handled = true;
+            }
+            else if (PageHost.Content == _playerPage && _playerPage.HandleKeyDown(e.Key))
+            {
                 e.Handled = true;
             }
         }

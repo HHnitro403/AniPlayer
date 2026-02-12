@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
+using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -26,6 +27,7 @@ public partial class PlayerPage : UserControl
     private DispatcherTimer? _positionTimer;
     private bool _isUserSeeking;
     private string[] _playlist = Array.Empty<string>();
+    private int[] _playlistEpisodeIds = Array.Empty<int>();
     private int _playlistIndex;
     private bool _isTransitioning;
     private DispatcherTimer? _controlsHideTimer;
@@ -36,6 +38,12 @@ public partial class PlayerPage : UserControl
     private ILibraryService? _libraryService;
     private Dictionary<int, (string? lang, string? title)> _audioTrackInfo = new();
     private bool _vsyncEnabled;
+
+    // Watch progress tracking
+    private IWatchProgressService? _watchProgressService;
+    private int _currentEpisodeId;
+    private int _progressSaveCounter;
+    private int _lastSavedPositionSeconds = -1;
 
     [DllImport("user32.dll")]
     private static extern bool GetCursorPos(out POINT lpPoint);
@@ -239,6 +247,25 @@ public partial class PlayerPage : UserControl
 
         StartPositionTimer();
 
+        // Resume from saved position if we have progress for this episode
+        if (_currentEpisodeId > 0 && _watchProgressService != null)
+        {
+            try
+            {
+                var progress = await _watchProgressService.GetProgressByEpisodeIdAsync(_currentEpisodeId);
+                if (progress != null && !progress.IsCompleted && progress.PositionSeconds > 5)
+                {
+                    Logger.Log($"Resuming episode {_currentEpisodeId} from {progress.PositionSeconds}s");
+                    await Task.Delay(300); // let mpv load the file first
+                    SeekAbsolute(progress.PositionSeconds);
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Log($"Failed to load saved progress: {ex.Message}");
+            }
+        }
+
         await Task.Delay(500);
         PollMpvEvents();
 
@@ -292,6 +319,73 @@ public partial class PlayerPage : UserControl
 
     private void FullscreenButton_Click(object? sender, RoutedEventArgs e) => FullscreenToggleRequested?.Invoke();
 
+    // ── Keyboard shortcuts ─────────────────────────────────
+
+    /// <summary>
+    /// Called by MainWindow.OnMainWindowKeyDown when the player page is active.
+    /// Returns true if the key was handled.
+    /// </summary>
+    public bool HandleKeyDown(Key key)
+    {
+        if (_mpvHandle == IntPtr.Zero || !_mpvInitialized || _currentFile == null)
+            return false;
+
+        switch (key)
+        {
+            case Key.Space:
+                PlayPauseButton_Click(null, null!);
+                return true;
+
+            case Key.Left:
+                SeekRelative(-5);
+                return true;
+
+            case Key.Right:
+                SeekRelative(5);
+                return true;
+
+            case Key.Up:
+                AdjustVolume(10);
+                return true;
+
+            case Key.Down:
+                AdjustVolume(-5);
+                return true;
+
+            default:
+                return false;
+        }
+    }
+
+    private void SeekRelative(double seconds)
+    {
+        if (_mpvHandle == IntPtr.Zero) return;
+        var cmd = new[]
+        {
+            Marshal.StringToHGlobalAnsi("seek"),
+            Marshal.StringToHGlobalAnsi(seconds.ToString("F1", CultureInfo.InvariantCulture)),
+            Marshal.StringToHGlobalAnsi("relative"),
+            IntPtr.Zero
+        };
+        LibMpvInterop.mpv_command(_mpvHandle, cmd);
+        foreach (var ptr in cmd)
+            if (ptr != IntPtr.Zero) Marshal.FreeHGlobal(ptr);
+    }
+
+    private void AdjustVolume(int delta)
+    {
+        if (_mpvHandle == IntPtr.Zero) return;
+        var volStr = GetMpvPropertyString("volume");
+        if (!double.TryParse(volStr, NumberStyles.Float, CultureInfo.InvariantCulture, out var vol))
+            vol = 100;
+        var newVol = Math.Clamp(vol + delta, 0, 150);
+        LibMpvInterop.mpv_set_property_string(
+            _mpvHandle,
+            Encoding.UTF8.GetBytes("volume\0"),
+            Encoding.UTF8.GetBytes($"{newVol:F0}\0"));
+        Logger.Log($"Volume: {vol:F0} → {newVol:F0}");
+    }
+
     // ── Playlist / auto-next ────────────────────────────────
 
     public void SetSeriesContext(int seriesId, ILibraryService libraryService)
@@ -300,10 +394,21 @@ public partial class PlayerPage : UserControl
         _libraryService = libraryService;
     }
 
-    public void SetPlaylist(string[] filePaths, int startIndex)
+    public void SetEpisodeContext(int episodeId)
+    {
+        _currentEpisodeId = episodeId;
+        _progressSaveCounter = 0;
+        _lastSavedPositionSeconds = -1;
+
+        // Resolve watch progress service from DI lazily
+        _watchProgressService ??= App.Services.GetService(typeof(IWatchProgressService)) as IWatchProgressService;
+    }
+
+    public void SetPlaylist(string[] filePaths, int startIndex, int[]? episodeIds = null)
     {
         _playlist = filePaths;
         _playlistIndex = startIndex;
+        _playlistEpisodeIds = episodeIds ?? Array.Empty<int>();
         NextButton.IsEnabled = startIndex < filePaths.Length - 1;
         Logger.Log($"Playlist set: {filePaths.Length} files, starting at index {startIndex}");
     }
@@ -318,9 +423,17 @@ public partial class PlayerPage : UserControl
         }
 
         _isTransitioning = true;
+
+        // Save/mark completed for the episode we're leaving
+        await SaveFinalProgressAsync();
+
         _playlistIndex++;
         NextButton.IsEnabled = _playlistIndex < _playlist.Length - 1;
         Logger.Log($"Playing next: index {_playlistIndex}/{_playlist.Length - 1}");
+
+        // Update episode context for the new episode
+        if (_playlistIndex < _playlistEpisodeIds.Length)
+            SetEpisodeContext(_playlistEpisodeIds[_playlistIndex]);
 
         await TransitionToFileAsync(_playlist[_playlistIndex]);
         _isTransitioning = false;
@@ -580,6 +693,20 @@ public partial class PlayerPage : UserControl
             ProgressSlider.Value = pos;
             TimeCurrentText.Text = FormatTime(pos);
             TimeTotalText.Text = FormatTime(dur);
+
+            // Save progress every ~5 seconds (20 ticks × 250ms)
+            _progressSaveCounter++;
+            if (_progressSaveCounter >= 20 && _currentEpisodeId > 0 && _watchProgressService != null)
+            {
+                _progressSaveCounter = 0;
+                var posSec = (int)pos;
+                var durSec = (int)dur;
+                if (posSec != _lastSavedPositionSeconds)
+                {
+                    _lastSavedPositionSeconds = posSec;
+                    _ = _watchProgressService.SaveProgressAsync(_currentEpisodeId, posSec, durSec);
+                }
+            }
         }
     }
 
@@ -688,10 +815,50 @@ public partial class PlayerPage : UserControl
         ShowControls();
     }
 
+    // ── Watch progress persistence ─────────────────────────
+
+    private async Task SaveFinalProgressAsync()
+    {
+        if (_currentEpisodeId <= 0 || _watchProgressService == null || _mpvHandle == IntPtr.Zero)
+            return;
+
+        try
+        {
+            var posStr = GetMpvPropertyString("time-pos");
+            var durStr = GetMpvPropertyString("duration");
+            if (double.TryParse(posStr, NumberStyles.Float, CultureInfo.InvariantCulture, out var pos)
+                && double.TryParse(durStr, NumberStyles.Float, CultureInfo.InvariantCulture, out var dur)
+                && dur > 0)
+            {
+                var posSec = (int)pos;
+                var durSec = (int)dur;
+
+                // Mark completed if within last 5% or last 120 seconds
+                if (pos >= dur * 0.95 || dur - pos < 120)
+                {
+                    Logger.Log($"Marking episode {_currentEpisodeId} as completed ({pos:F0}/{dur:F0}s)");
+                    await _watchProgressService.MarkCompletedAsync(_currentEpisodeId);
+                }
+                else
+                {
+                    Logger.Log($"Saving final progress for episode {_currentEpisodeId}: {posSec}/{durSec}s");
+                    await _watchProgressService.SaveProgressAsync(_currentEpisodeId, posSec, durSec);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Log($"Failed to save final progress: {ex.Message}");
+        }
+    }
+
     // ── Cleanup ──────────────────────────────────────────────
 
     private async Task CleanupCurrentFileAsync()
     {
+        // Save final watch position before stopping
+        await SaveFinalProgressAsync();
+
         StopPositionTimer();
         StopControlsHideTimer();
 
