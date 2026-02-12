@@ -12,6 +12,7 @@ namespace AniPlayer.UI
     {
         private IntPtr _nativeHandle;
         private MpvRenderer? _renderer;
+        private int _lastArrangeWidth, _lastArrangeHeight;
 
         public IntPtr NativeHandle => _nativeHandle;
         public MpvRenderer? Renderer => _renderer;
@@ -80,24 +81,22 @@ namespace AniPlayer.UI
         {
             var result = base.ArrangeOverride(finalSize);
 
-            // Resize the native child window to match the control size
-            if (_nativeHandle != IntPtr.Zero)
+            int newW = Math.Max((int)finalSize.Width, 1);
+            int newH = Math.Max((int)finalSize.Height, 1);
+
+            // Only resize when the size actually changes (avoids layout thrashing)
+            if (_nativeHandle != IntPtr.Zero && (newW != _lastArrangeWidth || newH != _lastArrangeHeight))
             {
-                Logger.Log($"ArrangeOverride: Resizing child window to {finalSize.Width}x{finalSize.Height}");
+                _lastArrangeWidth = newW;
+                _lastArrangeHeight = newH;
+                Logger.Log($"ArrangeOverride: Resizing child window to {newW}x{newH}");
 
                 if (OperatingSystem.IsWindows())
                 {
-                    ResizeWindowsControl(_nativeHandle, (int)finalSize.Width, (int)finalSize.Height);
+                    ResizeWindowsControl(_nativeHandle, newW, newH);
                 }
-                // Linux X11 windows resize automatically with parent
 
-                // Notify renderer of size change
-                if (_renderer != null)
-                {
-                    int width = Math.Max((int)finalSize.Width, 1);
-                    int height = Math.Max((int)finalSize.Height, 1);
-                    _renderer.Resize(width, height);
-                }
+                _renderer?.Resize(newW, newH);
             }
 
             return result;

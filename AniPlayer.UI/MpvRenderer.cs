@@ -83,6 +83,26 @@ namespace AniPlayer.UI
 
                 Logger.Log("OpenGL context is current");
 
+                // Enable vsync — swap buffers synced to monitor refresh rate
+                try
+                {
+                    IntPtr swapIntervalPtr = OpenGLInterop.wglGetProcAddress("wglSwapIntervalEXT");
+                    if (swapIntervalPtr != IntPtr.Zero)
+                    {
+                        var wglSwapInterval = Marshal.GetDelegateForFunctionPointer<WglSwapIntervalEXT>(swapIntervalPtr);
+                        wglSwapInterval(1);
+                        Logger.Log("Vsync enabled (wglSwapIntervalEXT = 1)");
+                    }
+                    else
+                    {
+                        Logger.Log("wglSwapIntervalEXT not available — vsync not set");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.Log($"Failed to set vsync: {ex.Message}");
+                }
+
                 // Log OpenGL version info
                 try
                 {
@@ -218,6 +238,9 @@ namespace AniPlayer.UI
             }
         }
 
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate bool WglSwapIntervalEXT(int interval);
+
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         private delegate IntPtr GetProcAddressDelegate(IntPtr ctx, [MarshalAs(UnmanagedType.LPStr)] string name);
 
@@ -270,8 +293,9 @@ namespace AniPlayer.UI
 
             try
             {
-                // Make context current
-                OpenGLInterop.wglMakeCurrent(_deviceContext, _glContext);
+                // Make context current (skip if already current to avoid driver overhead)
+                if (OpenGLInterop.wglGetCurrentContext() != _glContext)
+                    OpenGLInterop.wglMakeCurrent(_deviceContext, _glContext);
 
                 // Set viewport and clear
                 OpenGLInterop.glViewport(0, 0, _width, _height);
