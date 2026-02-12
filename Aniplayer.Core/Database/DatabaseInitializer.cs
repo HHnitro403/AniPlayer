@@ -45,7 +45,21 @@ public class DatabaseInitializer
         // Indexes
         await connection.ExecuteAsync(Schema.CreateIndexes).ConfigureAwait(false);
 
+        // Migrations — add columns that may not exist in older databases
+        await RunMigrationsAsync(connection).ConfigureAwait(false);
+
         _logger.LogInformation("Database initialized successfully");
+    }
+
+    private async Task RunMigrationsAsync(SqliteConnection connection)
+    {
+        // Add preferred_audio_title column (for mislabeled tracks where language alone isn't enough)
+        try
+        {
+            await connection.ExecuteAsync(
+                "ALTER TABLE TrackPreferences ADD COLUMN preferred_audio_title TEXT;").ConfigureAwait(false);
+        }
+        catch (SqliteException) { /* column already exists — safe to ignore */ }
     }
 
     private static class Schema

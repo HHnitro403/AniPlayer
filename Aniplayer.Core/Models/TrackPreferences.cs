@@ -6,6 +6,7 @@ public class TrackPreferences
     public int? EpisodeId { get; set; }
     public int? SeriesId { get; set; }
     public string? PreferredAudioLanguage { get; set; }
+    public string? PreferredAudioTitle { get; set; }
     public string? PreferredSubtitleLanguage { get; set; }
     public string? PreferredSubtitleName { get; set; }
 }

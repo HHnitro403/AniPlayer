@@ -184,6 +184,7 @@ public static class Queries
     public const string GetTrackPreferencesByEpisodeId = @"
         SELECT id AS Id, episode_id AS EpisodeId, series_id AS SeriesId,
                preferred_audio_language AS PreferredAudioLanguage,
+               preferred_audio_title AS PreferredAudioTitle,
                preferred_subtitle_language AS PreferredSubtitleLanguage,
                preferred_subtitle_name AS PreferredSubtitleName
         FROM TrackPreferences WHERE episode_id = @episodeId";
@@ -191,23 +192,26 @@ public static class Queries
     public const string GetTrackPreferencesBySeriesId = @"
         SELECT id AS Id, episode_id AS EpisodeId, series_id AS SeriesId,
                preferred_audio_language AS PreferredAudioLanguage,
+               preferred_audio_title AS PreferredAudioTitle,
                preferred_subtitle_language AS PreferredSubtitleLanguage,
                preferred_subtitle_name AS PreferredSubtitleName
         FROM TrackPreferences WHERE series_id = @seriesId AND episode_id IS NULL";
 
     public const string UpsertEpisodeTrackPreference = @"
-        INSERT INTO TrackPreferences (episode_id, preferred_audio_language, preferred_subtitle_language, preferred_subtitle_name)
-        VALUES (@episodeId, @audioLang, @subLang, @subName)
+        INSERT INTO TrackPreferences (episode_id, preferred_audio_language, preferred_audio_title, preferred_subtitle_language, preferred_subtitle_name)
+        VALUES (@episodeId, @audioLang, @audioTitle, @subLang, @subName)
         ON CONFLICT(episode_id) WHERE episode_id IS NOT NULL DO UPDATE SET
             preferred_audio_language    = excluded.preferred_audio_language,
+            preferred_audio_title       = excluded.preferred_audio_title,
             preferred_subtitle_language = excluded.preferred_subtitle_language,
             preferred_subtitle_name     = excluded.preferred_subtitle_name";
 
     public const string UpsertSeriesTrackPreference = @"
-        INSERT INTO TrackPreferences (series_id, preferred_audio_language, preferred_subtitle_language, preferred_subtitle_name)
-        VALUES (@seriesId, @audioLang, @subLang, @subName)
+        INSERT INTO TrackPreferences (series_id, preferred_audio_language, preferred_audio_title, preferred_subtitle_language, preferred_subtitle_name)
+        VALUES (@seriesId, @audioLang, @audioTitle, @subLang, @subName)
         ON CONFLICT(series_id) WHERE series_id IS NOT NULL AND episode_id IS NULL DO UPDATE SET
             preferred_audio_language    = excluded.preferred_audio_language,
+            preferred_audio_title       = excluded.preferred_audio_title,
             preferred_subtitle_language = excluded.preferred_subtitle_language,
             preferred_subtitle_name     = excluded.preferred_subtitle_name";
 

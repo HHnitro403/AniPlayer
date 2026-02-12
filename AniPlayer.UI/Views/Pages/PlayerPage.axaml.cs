@@ -34,7 +34,7 @@ public partial class PlayerPage : UserControl
     private int _lastCursorX, _lastCursorY;
     private int _currentSeriesId;
     private ILibraryService? _libraryService;
-    private Dictionary<int, string?> _audioTrackLanguages = new();
+    private Dictionary<int, (string? lang, string? title)> _audioTrackInfo = new();
 
     [DllImport("user32.dll")]
     private static extern bool GetCursorPos(out POINT lpPoint);
@@ -382,7 +382,7 @@ public partial class PlayerPage : UserControl
         {
             if (_mpvHandle == IntPtr.Zero) return;
             AudioTracksPanel.Children.Clear();
-            _audioTrackLanguages.Clear();
+            _audioTrackInfo.Clear();
 
             var trackListPtr = LibMpvInterop.mpv_get_property_string(
                 _mpvHandle, Encoding.UTF8.GetBytes("track-list\0"));
@@ -393,7 +393,7 @@ public partial class PlayerPage : UserControl
             if (string.IsNullOrEmpty(trackListJson)) return;
 
             var tracks = JsonDocument.Parse(trackListJson);
-            var audioTracks = new List<(int id, string label, string? lang)>();
+            var audioTracks = new List<(int id, string label, string? lang, string? title)>();
 
             foreach (var track in tracks.RootElement.EnumerateArray())
             {
@@ -416,37 +416,44 @@ public partial class PlayerPage : UserControl
                         label = $"Track {id}";
 
                     Logger.Log($"Audio track {id}: lang={lang}, title={title} → \"{label}\"");
-                    audioTracks.Add((id, label, lang));
-                    _audioTrackLanguages[id] = lang;
+                    audioTracks.Add((id, label, lang, title));
+                    _audioTrackInfo[id] = (lang, title);
                 }
             }
 
-            // Check for a saved audio language preference for this series
-            string? preferredLang = null;
+            // Check for a saved audio preference for this series
             if (_currentSeriesId > 0 && _libraryService != null)
             {
                 var pref = await _libraryService.GetSeriesTrackPreferenceAsync(_currentSeriesId);
-                preferredLang = pref?.PreferredAudioLanguage;
-                if (preferredLang != null)
-                    Logger.Log($"Series {_currentSeriesId} preferred audio language: {preferredLang}");
-            }
+                if (pref != null)
+                {
+                    Logger.Log($"Series {_currentSeriesId} preferred audio: lang={pref.PreferredAudioLanguage}, title={pref.PreferredAudioTitle}");
 
-            // Auto-switch to preferred language if available
-            if (!string.IsNullOrEmpty(preferredLang))
-            {
-                var match = audioTracks.FirstOrDefault(t =>
-                    string.Equals(t.lang, preferredLang, StringComparison.OrdinalIgnoreCase));
-                if (match.lang != null)
-                {
-                    Logger.Log($"Auto-selecting preferred audio track {match.id} ({match.lang})");
-                    LibMpvInterop.mpv_set_property_string(
-                        _mpvHandle,
-                        Encoding.UTF8.GetBytes("aid\0"),
-                        Encoding.UTF8.GetBytes($"{match.id}\0"));
-                }
-                else
-                {
-                    Logger.Log($"Preferred language '{preferredLang}' not available in this file, using default");
+                    // Match by title first (handles mislabeled tracks like Judas encodes)
+                    // then fall back to language-only matching
+                    var match = (!string.IsNullOrEmpty(pref.PreferredAudioTitle)
+                        ? audioTracks.FirstOrDefault(t =>
+                            string.Equals(t.title, pref.PreferredAudioTitle, StringComparison.OrdinalIgnoreCase))
+                        : default);
+
+                    if (match.title == null && !string.IsNullOrEmpty(pref.PreferredAudioLanguage))
+                    {
+                        match = audioTracks.FirstOrDefault(t =>
+                            string.Equals(t.lang, pref.PreferredAudioLanguage, StringComparison.OrdinalIgnoreCase));
+                    }
+
+                    if (match.title != null || match.lang != null)
+                    {
+                        Logger.Log($"Auto-selecting preferred audio track {match.id} (title={match.title}, lang={match.lang})");
+                        LibMpvInterop.mpv_set_property_string(
+                            _mpvHandle,
+                            Encoding.UTF8.GetBytes("aid\0"),
+                            Encoding.UTF8.GetBytes($"{match.id}\0"));
+                    }
+                    else
+                    {
+                        Logger.Log($"Preferred audio not available in this file, using default");
+                    }
                 }
             }
 
@@ -461,7 +468,7 @@ public partial class PlayerPage : UserControl
                 if (long.TryParse(aidStr, out var aid)) currentAid = aid;
             }
 
-            foreach (var (id, label, _) in audioTracks)
+            foreach (var (id, label, _, _) in audioTracks)
             {
                 var btn = new Button
                 {
@@ -498,13 +505,13 @@ public partial class PlayerPage : UserControl
                     : Avalonia.Media.FontWeight.Normal;
         }
 
-        // Persist the language choice for this series
+        // Persist the language + title choice for this series
         if (_currentSeriesId > 0 && _libraryService != null
-            && _audioTrackLanguages.TryGetValue(trackId, out var lang)
-            && !string.IsNullOrEmpty(lang))
+            && _audioTrackInfo.TryGetValue(trackId, out var info))
         {
-            Logger.Log($"Saving audio preference for series {_currentSeriesId}: {lang}");
-            _ = _libraryService.UpsertSeriesAudioPreferenceAsync(_currentSeriesId, lang);
+            var lang = info.lang ?? "";
+            Logger.Log($"Saving audio preference for series {_currentSeriesId}: lang={lang}, title={info.title}");
+            _ = _libraryService.UpsertSeriesAudioPreferenceAsync(_currentSeriesId, lang, info.title);
         }
     }
 
