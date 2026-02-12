@@ -29,4 +29,8 @@ public interface ILibraryService
         double? episodeNumber, string episodeType);
     Task DeleteEpisodeAsync(int id);
     Task<IEnumerable<string>> GetEpisodeFilePathsBySeriesIdAsync(int seriesId);
+
+    // Track Preferences
+    Task<TrackPreferences?> GetSeriesTrackPreferenceAsync(int seriesId);
+    Task UpsertSeriesAudioPreferenceAsync(int seriesId, string audioLanguage);
 }

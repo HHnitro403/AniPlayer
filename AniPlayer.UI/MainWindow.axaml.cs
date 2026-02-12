@@ -84,6 +84,11 @@ namespace AniPlayer.UI
             if (index >= 0)
                 _playerPage.SetPlaylist(files, index);
 
+            // Pass series context so the player can read/save audio track preferences
+            var episode = _currentEpisodes.FirstOrDefault(e => e.FilePath == filePath);
+            if (episode != null)
+                _playerPage.SetSeriesContext(episode.SeriesId, _libraryService);
+
             await _playerPage.LoadFileAsync(filePath);
         }
 

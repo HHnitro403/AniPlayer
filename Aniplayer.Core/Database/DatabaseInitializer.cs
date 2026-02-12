@@ -127,6 +127,8 @@ public class DatabaseInitializer
             CREATE INDEX IF NOT EXISTS idx_watch_progress_ep_id    ON WatchProgress(episode_id);
             CREATE INDEX IF NOT EXISTS idx_series_library_id       ON Series(library_id);
             CREATE INDEX IF NOT EXISTS idx_track_prefs_episode_id  ON TrackPreferences(episode_id);
-            CREATE INDEX IF NOT EXISTS idx_track_prefs_series_id   ON TrackPreferences(series_id);";
+            CREATE INDEX IF NOT EXISTS idx_track_prefs_series_id   ON TrackPreferences(series_id);
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_track_prefs_series_unique  ON TrackPreferences(series_id) WHERE episode_id IS NULL;
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_track_prefs_episode_unique ON TrackPreferences(episode_id) WHERE series_id IS NULL;";
     }
 }

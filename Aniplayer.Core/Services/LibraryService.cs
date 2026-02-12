@@ -153,4 +153,21 @@ public class LibraryService : ILibraryService
         return await conn.QueryAsync<string>(
             Queries.GetEpisodeFilePathsBySeriesId, new { seriesId });
     }
+
+    // ── Track Preferences ─────────────────────────────────────
+
+    public async Task<TrackPreferences?> GetSeriesTrackPreferenceAsync(int seriesId)
+    {
+        using var conn = _db.CreateConnection();
+        return await conn.QueryFirstOrDefaultAsync<TrackPreferences>(
+            Queries.GetTrackPreferencesBySeriesId, new { seriesId });
+    }
+
+    public async Task UpsertSeriesAudioPreferenceAsync(int seriesId, string audioLanguage)
+    {
+        using var conn = _db.CreateConnection();
+        await conn.ExecuteAsync(
+            Queries.UpsertSeriesTrackPreference,
+            new { seriesId, audioLang = audioLanguage, subLang = (string?)null, subName = (string?)null });
+    }
 }

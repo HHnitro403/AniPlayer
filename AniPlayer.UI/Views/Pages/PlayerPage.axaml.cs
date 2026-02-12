@@ -8,9 +8,11 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
+using Aniplayer.Core.Interfaces;
 
 namespace AniPlayer.UI;
 
@@ -30,6 +32,9 @@ public partial class PlayerPage : UserControl
     private bool _mouseOverControls;
     private bool _isFullscreen;
     private int _lastCursorX, _lastCursorY;
+    private int _currentSeriesId;
+    private ILibraryService? _libraryService;
+    private Dictionary<int, string?> _audioTrackLanguages = new();
 
     [DllImport("user32.dll")]
     private static extern bool GetCursorPos(out POINT lpPoint);
@@ -268,6 +273,12 @@ public partial class PlayerPage : UserControl
 
     // ── Playlist / auto-next ────────────────────────────────
 
+    public void SetSeriesContext(int seriesId, ILibraryService libraryService)
+    {
+        _currentSeriesId = seriesId;
+        _libraryService = libraryService;
+    }
+
     public void SetPlaylist(string[] filePaths, int startIndex)
     {
         _playlist = filePaths;
@@ -360,6 +371,7 @@ public partial class PlayerPage : UserControl
         {
             if (_mpvHandle == IntPtr.Zero) return;
             AudioTracksPanel.Children.Clear();
+            _audioTrackLanguages.Clear();
 
             var trackListPtr = LibMpvInterop.mpv_get_property_string(
                 _mpvHandle, Encoding.UTF8.GetBytes("track-list\0"));
@@ -370,7 +382,7 @@ public partial class PlayerPage : UserControl
             if (string.IsNullOrEmpty(trackListJson)) return;
 
             var tracks = JsonDocument.Parse(trackListJson);
-            var audioTracks = new List<(int id, string label)>();
+            var audioTracks = new List<(int id, string label, string? lang)>();
 
             foreach (var track in tracks.RootElement.EnumerateArray())
             {
@@ -393,10 +405,41 @@ public partial class PlayerPage : UserControl
                         label = $"Track {id}";
 
                     Logger.Log($"Audio track {id}: lang={lang}, title={title} → \"{label}\"");
-                    audioTracks.Add((id, label));
+                    audioTracks.Add((id, label, lang));
+                    _audioTrackLanguages[id] = lang;
                 }
             }
 
+            // Check for a saved audio language preference for this series
+            string? preferredLang = null;
+            if (_currentSeriesId > 0 && _libraryService != null)
+            {
+                var pref = await _libraryService.GetSeriesTrackPreferenceAsync(_currentSeriesId);
+                preferredLang = pref?.PreferredAudioLanguage;
+                if (preferredLang != null)
+                    Logger.Log($"Series {_currentSeriesId} preferred audio language: {preferredLang}");
+            }
+
+            // Auto-switch to preferred language if available
+            if (!string.IsNullOrEmpty(preferredLang))
+            {
+                var match = audioTracks.FirstOrDefault(t =>
+                    string.Equals(t.lang, preferredLang, StringComparison.OrdinalIgnoreCase));
+                if (match.lang != null)
+                {
+                    Logger.Log($"Auto-selecting preferred audio track {match.id} ({match.lang})");
+                    LibMpvInterop.mpv_set_property_string(
+                        _mpvHandle,
+                        Encoding.UTF8.GetBytes("aid\0"),
+                        Encoding.UTF8.GetBytes($"{match.id}\0"));
+                }
+                else
+                {
+                    Logger.Log($"Preferred language '{preferredLang}' not available in this file, using default");
+                }
+            }
+
+            // Re-read current aid after potential auto-switch
             var aidPtr = LibMpvInterop.mpv_get_property_string(
                 _mpvHandle, Encoding.UTF8.GetBytes("aid\0"));
             long currentAid = 0;
@@ -407,7 +450,7 @@ public partial class PlayerPage : UserControl
                 if (long.TryParse(aidStr, out var aid)) currentAid = aid;
             }
 
-            foreach (var (id, label) in audioTracks)
+            foreach (var (id, label, _) in audioTracks)
             {
                 var btn = new Button
                 {
@@ -426,7 +469,6 @@ public partial class PlayerPage : UserControl
         {
             Logger.LogError("UpdateAudioTracks", ex);
         }
-        await Task.CompletedTask;
     }
 
     private void SwitchAudioTrack(int trackId)
@@ -443,6 +485,15 @@ public partial class PlayerPage : UserControl
                 btn.FontWeight = (btn.Tag is int id && id == trackId)
                     ? Avalonia.Media.FontWeight.Bold
                     : Avalonia.Media.FontWeight.Normal;
+        }
+
+        // Persist the language choice for this series
+        if (_currentSeriesId > 0 && _libraryService != null
+            && _audioTrackLanguages.TryGetValue(trackId, out var lang)
+            && !string.IsNullOrEmpty(lang))
+        {
+            Logger.Log($"Saving audio preference for series {_currentSeriesId}: {lang}");
+            _ = _libraryService.UpsertSeriesAudioPreferenceAsync(_currentSeriesId, lang);
         }
     }
 
