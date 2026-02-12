@@ -29,6 +29,13 @@ public partial class PlayerPage : UserControl
     private DispatcherTimer? _controlsHideTimer;
     private bool _mouseOverControls;
     private bool _isFullscreen;
+    private int _lastCursorX, _lastCursorY;
+
+    [DllImport("user32.dll")]
+    private static extern bool GetCursorPos(out POINT lpPoint);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct POINT { public int X, Y; }
 
     public event Action? PlaybackStopped;
     public event Action? FullscreenToggleRequested;
@@ -458,6 +465,19 @@ public partial class PlayerPage : UserControl
     private void OnPositionTimerTick(object? sender, EventArgs e)
     {
         if (_mpvHandle == IntPtr.Zero || !_mpvInitialized) return;
+
+        // In fullscreen, poll cursor position to detect mouse movement over the
+        // native video HWND (which eats Avalonia PointerMoved events).
+        if (_isFullscreen && GetCursorPos(out var cursorPos))
+        {
+            if (cursorPos.X != _lastCursorX || cursorPos.Y != _lastCursorY)
+            {
+                _lastCursorX = cursorPos.X;
+                _lastCursorY = cursorPos.Y;
+                ShowControls();
+                ResetControlsHideTimer();
+            }
+        }
 
         // Check if playback reached EOF (keep-open pauses at end)
         var eofReached = GetMpvPropertyString("eof-reached");
