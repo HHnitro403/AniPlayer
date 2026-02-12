@@ -7,4 +7,5 @@ public interface IMetadataService
     Task<AniListMetadata?> SearchAsync(string title, CancellationToken ct = default);
     Task ApplyMetadataToSeriesAsync(int seriesId, CancellationToken ct = default);
     Task<string?> DownloadCoverAsync(string imageUrl, int seriesId, CancellationToken ct = default);
+    Task FetchAllMissingMetadataAsync(CancellationToken ct = default);
 }

@@ -63,6 +63,12 @@
                     <ToggleSwitch x:Name="AutoFetchToggle" Grid.Column="1"
                                   IsChecked="True"/>
                 </Grid>
+                <Button x:Name="FetchAllMetadataButton"
+                        Content="Fetch All Missing Metadata" Padding="12,8"
+                        Margin="0,4,0,0"
+                        Click="FetchAllMetadata_Click"/>
+                <TextBlock x:Name="FetchStatusText"
+                           FontSize="12" Opacity="0.5" Margin="0,2,0,0"/>
             </StackPanel>
 
             <Separator/>

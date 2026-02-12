@@ -104,6 +104,29 @@ public partial class OptionsPage : UserControl
         };
     }
 
+    private async void FetchAllMetadata_Click(object? sender, RoutedEventArgs e)
+    {
+        FetchAllMetadataButton.IsEnabled = false;
+        FetchAllMetadataButton.Content = "Fetching...";
+        FetchStatusText.Text = "Fetching metadata for series without data...";
+        try
+        {
+            var metadata = App.Services.GetRequiredService<IMetadataService>();
+            await metadata.FetchAllMissingMetadataAsync();
+            FetchStatusText.Text = "Done — metadata fetched for all series.";
+        }
+        catch (Exception ex)
+        {
+            Logger.Log($"[OptionsPage] Batch metadata fetch failed: {ex.Message}");
+            FetchStatusText.Text = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            FetchAllMetadataButton.Content = "Fetch All Missing Metadata";
+            FetchAllMetadataButton.IsEnabled = true;
+        }
+    }
+
     private async void AddLibraryFolderButton_Click(object? sender, RoutedEventArgs e)
     {
         Logger.Log("[OptionsPage] Add Library Folder button clicked — opening folder picker");

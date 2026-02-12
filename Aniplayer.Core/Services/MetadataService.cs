@@ -142,6 +142,30 @@ public class MetadataService : IMetadataService
         }
     }
 
+    public async Task FetchAllMissingMetadataAsync(CancellationToken ct = default)
+    {
+        var allSeries = await _library.GetAllSeriesAsync();
+        var missing = allSeries.Where(s => s.MetadataFetchedAt == null).ToList();
+
+        _logger.LogInformation("Fetching metadata for {Count} series", missing.Count);
+
+        foreach (var series in missing)
+        {
+            ct.ThrowIfCancellationRequested();
+            try
+            {
+                await ApplyMetadataToSeriesAsync(series.Id, ct);
+                await Task.Delay(1000, ct); // Rate limit: 1 request/second
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogWarning(ex, "Metadata fetch failed for {Title}", series.FolderName);
+            }
+        }
+
+        _logger.LogInformation("Batch metadata fetch complete");
+    }
+
     private static string CleanTitleForSearch(string title)
     {
         // Strip common suffixes that break AniList matching

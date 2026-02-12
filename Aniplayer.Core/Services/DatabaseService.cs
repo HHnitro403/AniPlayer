@@ -37,18 +37,43 @@ public class DatabaseService : IDatabaseService
     public async Task InitializeAsync()
     {
         _logger.LogInformation("DatabaseService.InitializeAsync");
+
+        // Auto-backup existing database before init (keeps last 3 backups)
+        BackupDatabase();
+
+        await _initializer.InitializeAsync();
+    }
+
+    private void BackupDatabase()
+    {
+        if (!File.Exists(AppConstants.DbPath))
+            return;
+
         try
         {
-            await _initializer.InitializeAsync();
+            var backupDir = Path.Combine(AppConstants.AppDataPath, "backups");
+            Directory.CreateDirectory(backupDir);
+
+            var backupPath = Path.Combine(backupDir,
+                $"aniplayer-{DateTime.Now:yyyyMMdd-HHmmss}.db");
+            File.Copy(AppConstants.DbPath, backupPath, overwrite: true);
+            _logger.LogInformation("Database backed up to {Path}", backupPath);
+
+            // Keep only the 3 most recent backups
+            var backups = Directory.GetFiles(backupDir, "aniplayer-*.db")
+                .OrderByDescending(f => f)
+                .Skip(3)
+                .ToArray();
+
+            foreach (var old in backups)
+            {
+                File.Delete(old);
+                _logger.LogDebug("Deleted old backup: {Path}", old);
+            }
         }
-        catch (SqliteException ex) when (ex.Message.Contains("malformed"))
+        catch (Exception ex)
         {
-            _logger.LogCritical("Database corrupted, attempting backup and recreation");
-            var backup = $"{AppConstants.DbPath}.backup-{DateTime.Now:yyyyMMdd-HHmmss}";
-            if (File.Exists(AppConstants.DbPath))
-                File.Move(AppConstants.DbPath, backup);
-            _logger.LogWarning("Backed up corrupted DB to {Path}", backup);
-            await _initializer.InitializeAsync();
+            _logger.LogWarning(ex, "Database backup failed — continuing without backup");
         }
     }
 }
