@@ -45,6 +45,11 @@ public partial class PlayerPage : UserControl
     private int _progressSaveCounter;
     private int _lastSavedPositionSeconds = -1;
 
+    // Seek debouncing — prevent flooding mpv with seek commands
+    private long _lastSeekTicks;
+    // Prevents re-entrant timer ticks from piling up if mpv is slow
+    private bool _tickInProgress;
+
     [DllImport("user32.dll")]
     private static extern bool GetCursorPos(out POINT lpPoint);
 
@@ -360,30 +365,56 @@ public partial class PlayerPage : UserControl
     private void SeekRelative(double seconds)
     {
         if (_mpvHandle == IntPtr.Zero) return;
-        var cmd = new[]
+
+        // Debounce: skip if last seek was <200ms ago — prevents flooding mpv
+        var now = Environment.TickCount64;
+        if (now - _lastSeekTicks < 200) return;
+        _lastSeekTicks = now;
+
+        // Run off UI thread — mpv_command("seek") blocks until the seek is done,
+        // which can take 100-500ms on HEVC content and freezes the UI.
+        var handle = _mpvHandle;
+        Task.Run(() =>
         {
-            Marshal.StringToHGlobalAnsi("seek"),
-            Marshal.StringToHGlobalAnsi(seconds.ToString("F1", CultureInfo.InvariantCulture)),
-            Marshal.StringToHGlobalAnsi("relative"),
-            IntPtr.Zero
-        };
-        LibMpvInterop.mpv_command(_mpvHandle, cmd);
-        foreach (var ptr in cmd)
-            if (ptr != IntPtr.Zero) Marshal.FreeHGlobal(ptr);
+            try
+            {
+                var cmd = new[]
+                {
+                    Marshal.StringToHGlobalAnsi("seek"),
+                    Marshal.StringToHGlobalAnsi(seconds.ToString("F1", CultureInfo.InvariantCulture)),
+                    Marshal.StringToHGlobalAnsi("relative+keyframes"),
+                    IntPtr.Zero
+                };
+                LibMpvInterop.mpv_command(handle, cmd);
+                foreach (var ptr in cmd)
+                    if (ptr != IntPtr.Zero) Marshal.FreeHGlobal(ptr);
+            }
+            catch (Exception ex)
+            {
+                Logger.Log($"SeekRelative failed: {ex.Message}");
+            }
+        });
     }
 
     private void AdjustVolume(int delta)
     {
         if (_mpvHandle == IntPtr.Zero) return;
-        var volStr = GetMpvPropertyString("volume");
-        if (!double.TryParse(volStr, NumberStyles.Float, CultureInfo.InvariantCulture, out var vol))
-            vol = 100;
-        var newVol = Math.Clamp(vol + delta, 0, 150);
-        LibMpvInterop.mpv_set_property_string(
-            _mpvHandle,
-            Encoding.UTF8.GetBytes("volume\0"),
-            Encoding.UTF8.GetBytes($"{newVol:F0}\0"));
-        Logger.Log($"Volume: {vol:F0} → {newVol:F0}");
+        try
+        {
+            var volStr = GetMpvPropertyString("volume");
+            if (!double.TryParse(volStr, NumberStyles.Float, CultureInfo.InvariantCulture, out var vol))
+                vol = 100;
+            var newVol = Math.Clamp(vol + delta, 0, 150);
+            LibMpvInterop.mpv_set_property_string(
+                _mpvHandle,
+                Encoding.UTF8.GetBytes("volume\0"),
+                Encoding.UTF8.GetBytes($"{newVol:F0}\0"));
+            Logger.Log($"Volume: {vol:F0} → {newVol:F0}");
+        }
+        catch (Exception ex)
+        {
+            Logger.Log($"AdjustVolume failed: {ex.Message}");
+        }
     }
 
     // ── Playlist / auto-next ────────────────────────────────
@@ -754,59 +785,99 @@ public partial class PlayerPage : UserControl
         _positionTimer = null;
     }
 
-    private void OnPositionTimerTick(object? sender, EventArgs e)
+    private async void OnPositionTimerTick(object? sender, EventArgs e)
     {
         if (_mpvHandle == IntPtr.Zero || !_mpvInitialized) return;
+        if (_tickInProgress) return; // skip if previous tick is still running
+        _tickInProgress = true;
 
-        // In fullscreen, poll cursor position to detect mouse movement over the
-        // native video HWND (which eats Avalonia PointerMoved events).
-        if (_isFullscreen && GetCursorPos(out var cursorPos))
+        try
         {
-            if (cursorPos.X != _lastCursorX || cursorPos.Y != _lastCursorY)
+            // In fullscreen, poll cursor position to detect mouse movement over the
+            // native video HWND (which eats Avalonia PointerMoved events).
+            if (_isFullscreen && GetCursorPos(out var cursorPos))
             {
-                _lastCursorX = cursorPos.X;
-                _lastCursorY = cursorPos.Y;
-                ShowControls();
-                ResetControlsHideTimer();
-            }
-        }
-
-        // Check if playback reached EOF (keep-open pauses at end)
-        var eofReached = GetMpvPropertyString("eof-reached");
-        if (eofReached == "yes" && !_isTransitioning && _playlistIndex < _playlist.Length - 1)
-        {
-            Logger.Log("EOF reached — auto-playing next episode");
-            _ = PlayNextInPlaylistAsync();
-            return;
-        }
-
-        if (_isUserSeeking) return;
-
-        var posStr = GetMpvPropertyString("time-pos");
-        var durStr = GetMpvPropertyString("duration");
-
-        if (double.TryParse(posStr, NumberStyles.Float, CultureInfo.InvariantCulture, out var pos)
-            && double.TryParse(durStr, NumberStyles.Float, CultureInfo.InvariantCulture, out var dur)
-            && dur > 0)
-        {
-            ProgressSlider.Maximum = dur;
-            ProgressSlider.Value = pos;
-            TimeCurrentText.Text = FormatTime(pos);
-            TimeTotalText.Text = FormatTime(dur);
-
-            // Save progress every ~5 seconds (20 ticks × 250ms)
-            _progressSaveCounter++;
-            if (_progressSaveCounter >= 20 && _currentEpisodeId > 0 && _watchProgressService != null)
-            {
-                _progressSaveCounter = 0;
-                var posSec = (int)pos;
-                var durSec = (int)dur;
-                if (posSec != _lastSavedPositionSeconds)
+                if (cursorPos.X != _lastCursorX || cursorPos.Y != _lastCursorY)
                 {
-                    _lastSavedPositionSeconds = posSec;
-                    _ = _watchProgressService.SaveProgressAsync(_currentEpisodeId, posSec, durSec);
+                    _lastCursorX = cursorPos.X;
+                    _lastCursorY = cursorPos.Y;
+                    ShowControls();
+                    ResetControlsHideTimer();
                 }
             }
+
+            // Read mpv properties off the UI thread — these can block if mpv is busy seeking
+            var handle = _mpvHandle;
+            if (handle == IntPtr.Zero) return;
+
+            var (eofReached, posStr, durStr) = await Task.Run(() =>
+            {
+                var eof = GetMpvPropertyString("eof-reached");
+                var pos = GetMpvPropertyString("time-pos");
+                var dur = GetMpvPropertyString("duration");
+                return (eof, pos, dur);
+            });
+
+            // Back on UI thread — check handle is still valid
+            if (_mpvHandle == IntPtr.Zero) return;
+
+            // Check if playback reached EOF (keep-open pauses at end)
+            if (eofReached == "yes" && !_isTransitioning && _playlistIndex < _playlist.Length - 1)
+            {
+                Logger.Log("EOF reached — auto-playing next episode");
+                _ = PlayNextInPlaylistAsync();
+                return;
+            }
+
+            if (_isUserSeeking) return;
+
+            if (double.TryParse(posStr, NumberStyles.Float, CultureInfo.InvariantCulture, out var pos)
+                && double.TryParse(durStr, NumberStyles.Float, CultureInfo.InvariantCulture, out var dur)
+                && dur > 0)
+            {
+                ProgressSlider.Maximum = dur;
+                ProgressSlider.Value = pos;
+                TimeCurrentText.Text = FormatTime(pos);
+                TimeTotalText.Text = FormatTime(dur);
+
+                // Save progress every ~5 seconds (20 ticks × 250ms)
+                _progressSaveCounter++;
+                if (_progressSaveCounter >= 20 && _currentEpisodeId > 0 && _watchProgressService != null)
+                {
+                    _progressSaveCounter = 0;
+                    var posSec = (int)pos;
+                    var durSec = (int)dur;
+                    if (posSec != _lastSavedPositionSeconds)
+                    {
+                        _lastSavedPositionSeconds = posSec;
+                        SaveProgressFireAndForget(_currentEpisodeId, posSec, durSec);
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Log($"OnPositionTimerTick exception: {ex.Message}");
+        }
+        finally
+        {
+            _tickInProgress = false;
+        }
+    }
+
+    /// <summary>
+    /// Safely fire-and-forget progress save — catches exceptions so they
+    /// don't become unobserved task exceptions that crash the process.
+    /// </summary>
+    private async void SaveProgressFireAndForget(int episodeId, int posSec, int durSec)
+    {
+        try
+        {
+            await _watchProgressService!.SaveProgressAsync(episodeId, posSec, durSec);
+        }
+        catch (Exception ex)
+        {
+            Logger.Log($"SaveProgress failed: {ex.Message}");
         }
     }
 
@@ -827,26 +898,45 @@ public partial class PlayerPage : UserControl
     private void SeekAbsolute(double seconds)
     {
         if (_mpvHandle == IntPtr.Zero) return;
-        var cmd = new[]
+        var handle = _mpvHandle;
+        Task.Run(() =>
         {
-            Marshal.StringToHGlobalAnsi("seek"),
-            Marshal.StringToHGlobalAnsi(seconds.ToString("F1", CultureInfo.InvariantCulture)),
-            Marshal.StringToHGlobalAnsi("absolute"),
-            IntPtr.Zero
-        };
-        int result = LibMpvInterop.mpv_command(_mpvHandle, cmd);
-        Logger.Log($"Seek to {seconds:F1}s: {result}");
-        foreach (var ptr in cmd)
-            if (ptr != IntPtr.Zero) Marshal.FreeHGlobal(ptr);
+            try
+            {
+                var cmd = new[]
+                {
+                    Marshal.StringToHGlobalAnsi("seek"),
+                    Marshal.StringToHGlobalAnsi(seconds.ToString("F1", CultureInfo.InvariantCulture)),
+                    Marshal.StringToHGlobalAnsi("absolute+keyframes"),
+                    IntPtr.Zero
+                };
+                int result = LibMpvInterop.mpv_command(handle, cmd);
+                Logger.Log($"Seek to {seconds:F1}s: {result}");
+                foreach (var ptr in cmd)
+                    if (ptr != IntPtr.Zero) Marshal.FreeHGlobal(ptr);
+            }
+            catch (Exception ex)
+            {
+                Logger.Log($"SeekAbsolute failed: {ex.Message}");
+            }
+        });
     }
 
     private string? GetMpvPropertyString(string name)
     {
-        var ptr = LibMpvInterop.mpv_get_property_string(_mpvHandle, Encoding.UTF8.GetBytes(name + "\0"));
-        if (ptr == IntPtr.Zero) return null;
-        var val = Marshal.PtrToStringAnsi(ptr);
-        LibMpvInterop.mpv_free(ptr);
-        return val;
+        if (_mpvHandle == IntPtr.Zero) return null;
+        try
+        {
+            var ptr = LibMpvInterop.mpv_get_property_string(_mpvHandle, Encoding.UTF8.GetBytes(name + "\0"));
+            if (ptr == IntPtr.Zero) return null;
+            var val = Marshal.PtrToStringAnsi(ptr);
+            LibMpvInterop.mpv_free(ptr);
+            return val;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private static string FormatTime(double seconds)
