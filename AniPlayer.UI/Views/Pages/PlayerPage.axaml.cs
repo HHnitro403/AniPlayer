@@ -116,9 +116,8 @@ public partial class PlayerPage : UserControl
             {
                 Logger.Log("VideoHostControl.NativeHandle is Zero, retrying in 500ms");
                 StatusText.Text = "Waiting for video surface...";
-                Task.Delay(500).ContinueWith(_ =>
-                    Avalonia.Threading.Dispatcher.UIThread.Post(InitializeMpv));
-                return;
+                            await Task.Delay(500);
+                            Dispatcher.UIThread.Post(InitializeMpv);                return;
             }
 
             // Read vsync setting (default off)

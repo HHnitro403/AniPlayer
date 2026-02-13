@@ -53,7 +53,7 @@ namespace AniPlayer.UI
                 }
 
                 // Subscribe to render events
-                _renderer.RenderNeeded += OnRenderNeeded;
+                
 
                 Logger.Log("Renderer initialized successfully");
             }
@@ -62,18 +62,6 @@ namespace AniPlayer.UI
                 Logger.LogError("InitializeRenderer exception", ex);
                 _renderer?.Dispose();
                 _renderer = null;
-            }
-        }
-
-        private void OnRenderNeeded()
-        {
-            try
-            {
-                _renderer?.Render();
-            }
-            catch (Exception ex)
-            {
-                Logger.LogError("OnRenderNeeded exception", ex);
             }
         }
 
@@ -109,7 +97,7 @@ namespace AniPlayer.UI
             // Clean up renderer
             if (_renderer != null)
             {
-                _renderer.RenderNeeded -= OnRenderNeeded;
+                
                 _renderer.Dispose();
                 _renderer = null;
             }
