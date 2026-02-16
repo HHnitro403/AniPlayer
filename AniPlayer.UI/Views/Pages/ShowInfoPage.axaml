@@ -1,9 +1,82 @@
-<Window xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
-        x:Class="AniPlayer.UI.ShowInfoPage"
-        Title="ShowInfoPage">
-  Welcome to Avalonia!
-</Window>
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="700"
+             x:Class="AniPlayer.UI.ShowInfoPage">
+
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="32,24" Spacing="24">
+
+            <!-- Navigation -->
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button x:Name="BackButton" Content="Back"
+                        Padding="12,6"
+                        Click="BackButton_Click"/>
+                <Button x:Name="RefreshMetadataButton" Content="Refresh Metadata"
+                        Padding="12,6"
+                        Click="RefreshMetadata_Click"/>
+            </StackPanel>
+
+            <!-- Header: cover + info -->
+            <Grid ColumnDefinitions="180,*" MinHeight="260">
+                <!-- Cover image placeholder -->
+                <Border Background="#2A2A3E" CornerRadius="8"
+                        Width="170" Height="240"
+                        VerticalAlignment="Top">
+                    <Panel>
+                        <Image x:Name="CoverImage" Stretch="UniformToFill"/>
+                        <TextBlock x:Name="CoverPlaceholder"
+                                   Text="No Cover"
+                                   Foreground="#55FFFFFF" FontSize="14"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"/>
+                    </Panel>
+                </Border>
+
+                <!-- Series info -->
+                <StackPanel Grid.Column="1" Margin="24,0,0,0" Spacing="8">
+                    <TextBlock x:Name="TitleText" Text="Series Title"
+                               FontSize="26" FontWeight="Bold"
+                               TextWrapping="Wrap"/>
+                    <TextBlock x:Name="AlternateTitleText"
+                               FontSize="14" Opacity="0.5"
+                               TextWrapping="Wrap"/>
+                    <StackPanel Orientation="Horizontal" Spacing="16" Margin="0,8,0,0">
+                        <TextBlock x:Name="EpisodeCountText" Text="? episodes"
+                                   FontSize="13" Opacity="0.7"/>
+                        <TextBlock x:Name="StatusBadge" Text="Unknown"
+                                   FontSize="13" Opacity="0.7"/>
+                        <TextBlock x:Name="ScoreText" FontSize="13" Opacity="0.7"/>
+                    </StackPanel>
+                    <WrapPanel x:Name="GenresPanel" Margin="0,8,0,0"/>
+                    <TextBlock x:Name="SynopsisText"
+                               FontSize="14" Opacity="0.8"
+                               TextWrapping="Wrap"
+                               MaxHeight="120"
+                               Margin="0,8,0,0"/>
+                </StackPanel>
+            </Grid>
+
+            <Separator Margin="0,8"/>
+
+            <!-- Episode list -->
+            <StackPanel Spacing="12">
+                <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Text="Episodes" FontSize="20" FontWeight="SemiBold"
+                               VerticalAlignment="Center"/>
+                    <ComboBox x:Name="EpisodeTypeFilter" Grid.Column="1"
+                              SelectedIndex="0" MinWidth="140">
+                        <ComboBoxItem Content="All"/>
+                        <ComboBoxItem Content="Episodes"/>
+                        <ComboBoxItem Content="Specials"/>
+                        <ComboBoxItem Content="OVA"/>
+                    </ComboBox>
+                </Grid>
+
+                <StackPanel x:Name="EpisodeListPanel" Spacing="4"/>
+            </StackPanel>
+
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

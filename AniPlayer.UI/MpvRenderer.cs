@@ -6,7 +6,8 @@ using Avalonia.Threading;
 namespace AniPlayer.UI
 {
     /// <summary>
-    /// Handles libmpv render API integration with OpenGL
+    /// Handles libmpv render API integration with OpenGL on a dedicated thread.
+    /// This prevents VSync from blocking the UI thread.
     /// </summary>
     public class MpvRenderer : IDisposable
     {
@@ -15,278 +16,144 @@ namespace AniPlayer.UI
         private IntPtr _windowHandle;
         private IntPtr _deviceContext;
         private IntPtr _glContext;
-        private int _width;
-        private int _height;
-        private bool _disposed;
+        
+        // Volatile for thread safety without locks for simple reads/writes
+        private volatile int _width;
+        private volatile int _height;
+        private volatile bool _isRunning;
+        
+        private Thread? _renderThread;
+        private readonly AutoResetEvent _renderSignal = new(false);
+        private readonly ManualResetEventSlim _initSignal = new(false);
+        private bool _initSuccess;
+
         private LibMpvRenderInterop.MpvRenderUpdateCallback? _updateCallback;
         private GCHandle _callbackHandle;
-
-        public event Action? RenderNeeded;
 
         public bool IsInitialized => _renderContext != IntPtr.Zero;
 
         public MpvRenderer(IntPtr mpvHandle, IntPtr windowHandle)
         {
-            Logger.Log($"=== MpvRenderer Constructor START ===");
+            Logger.Log($"=== MpvRenderer Constructor ===");
             _mpvHandle = mpvHandle;
             _windowHandle = windowHandle;
-            Logger.Log($"MPV handle: {mpvHandle}, Window handle: {windowHandle}");
         }
 
-        public bool Initialize(int width, int height)
+        public bool Initialize(int width, int height, bool vsync = false)
         {
-            Logger.Log($"=== MpvRenderer Initialize START (size: {width}x{height}) ===");
+            Logger.Log($"=== MpvRenderer Initialize (Size: {width}x{height}, Vsync: {vsync}) ===");
+            
+            _width = width;
+            _height = height;
+            _isRunning = true;
+            _initSignal.Reset();
 
+            // Start the dedicated render thread
+            _renderThread = new Thread(() => RenderLoop(vsync))
+            {
+                Name = "MpvGLRenderThread",
+                IsBackground = true
+            };
+            _renderThread.Start();
+
+            // Wait for initialization to complete on the thread
+            _initSignal.Wait();
+            
+            if (_initSuccess)
+            {
+                Logger.Log("Renderer initialized successfully on background thread.");
+            }
+            else
+            {
+                Logger.LogError("Renderer failed to initialize on background thread.");
+                Dispose(); // Cleanup if failed
+            }
+
+            return _initSuccess;
+        }
+
+        private void RenderLoop(bool vsync)
+        {
             try
             {
-                _width = width;
-                _height = height;
-
-                // Get device context for the window
-                Logger.Log("Getting device context...");
+                // 1. Setup OpenGL on this thread
                 _deviceContext = OpenGLInterop.GetDC(_windowHandle);
-                if (_deviceContext == IntPtr.Zero)
-                {
-                    Logger.LogError("Failed to get device context");
-                    return false;
-                }
-                Logger.Log($"Device context: {_deviceContext}");
+                if (_deviceContext == IntPtr.Zero) throw new Exception("Failed to get DC");
 
-                // Set pixel format
-                Logger.Log("Setting pixel format...");
                 var pfd = OpenGLInterop.GetDefaultPixelFormatDescriptor();
                 int pixelFormat = OpenGLInterop.ChoosePixelFormat(_deviceContext, ref pfd);
-                Logger.Log($"Chosen pixel format: {pixelFormat}");
-
                 if (pixelFormat == 0 || !OpenGLInterop.SetPixelFormat(_deviceContext, pixelFormat, ref pfd))
-                {
-                    Logger.LogError("Failed to set pixel format");
-                    return false;
-                }
+                    throw new Exception("Failed to set pixel format");
 
-                // Create OpenGL context
-                Logger.Log("Creating OpenGL context...");
                 _glContext = OpenGLInterop.wglCreateContext(_deviceContext);
-                if (_glContext == IntPtr.Zero)
-                {
-                    Logger.LogError("Failed to create OpenGL context");
-                    return false;
-                }
-                Logger.Log($"OpenGL context: {_glContext}");
+                if (_glContext == IntPtr.Zero) throw new Exception("Failed to create GL context");
 
-                // Make context current
                 if (!OpenGLInterop.wglMakeCurrent(_deviceContext, _glContext))
-                {
-                    Logger.LogError("Failed to make OpenGL context current");
-                    return false;
-                }
+                    throw new Exception("Failed to make GL context current");
 
-                Logger.Log("OpenGL context is current");
+                // 2. Setup VSync
+                SetupVsync(vsync);
 
-                // Log OpenGL version info
-                try
-                {
-                    IntPtr versionPtr = OpenGLInterop.glGetString(OpenGLInterop.GL_VERSION);
-                    IntPtr vendorPtr = OpenGLInterop.glGetString(OpenGLInterop.GL_VENDOR);
-                    IntPtr rendererPtr = OpenGLInterop.glGetString(OpenGLInterop.GL_RENDERER);
-
-                    string? version = versionPtr != IntPtr.Zero ? Marshal.PtrToStringAnsi(versionPtr) : "unknown";
-                    string? vendor = vendorPtr != IntPtr.Zero ? Marshal.PtrToStringAnsi(vendorPtr) : "unknown";
-                    string? renderer = rendererPtr != IntPtr.Zero ? Marshal.PtrToStringAnsi(rendererPtr) : "unknown";
-
-                    Logger.Log($"OpenGL Version: {version}");
-                    Logger.Log($"OpenGL Vendor: {vendor}");
-                    Logger.Log($"OpenGL Renderer: {renderer}");
-                }
-                catch (Exception ex)
-                {
-                    Logger.Log($"Failed to get OpenGL info: {ex.Message}");
-                }
-
-                // Create libmpv render context with OpenGL
-                Logger.Log("Creating libmpv render context...");
+                // 3. Create MPV Render Context
                 if (!CreateMpvRenderContext())
-                {
-                    Logger.LogError("Failed to create MPV render context");
-                    return false;
-                }
+                    throw new Exception("Failed to create MPV render context");
 
-                Logger.Log("=== MpvRenderer Initialize END (SUCCESS) ===");
-                return true;
+                // Signal success to the main thread
+                _initSuccess = true;
+                _initSignal.Set();
+
+                // 4. Render Loop
+                while (_isRunning)
+                {
+                    // Wait for signal from MPV (or timeout to check _isRunning occasionally)
+                    _renderSignal.WaitOne(1000); 
+
+                    if (!_isRunning) break;
+
+                    ProcessRender();
+                }
             }
             catch (Exception ex)
             {
-                Logger.LogError("MpvRenderer Initialize exception", ex);
-                return false;
+                Logger.LogError("RenderLoop Crashed", ex);
+                _initSuccess = false;
+                _initSignal.Set(); // Unblock main thread if we crash during init
+            }
+            finally
+            {
+                CleanupGL();
             }
         }
 
-        private bool CreateMpvRenderContext()
+        private void SetupVsync(bool enabled)
         {
             try
             {
-                // Get proc address function pointer
-                GetProcAddressDelegate getProcAddress = GetProcAddressImpl;
-                IntPtr getProcAddressPtr = Marshal.GetFunctionPointerForDelegate(getProcAddress);
-
-                // Keep delegate alive
-                _callbackHandle = GCHandle.Alloc(getProcAddress);
-
-                // Create OpenGL init params
-                var initParams = new LibMpvRenderInterop.MpvOpenGLInitParams
+                IntPtr swapIntervalPtr = OpenGLInterop.wglGetProcAddress("wglSwapIntervalEXT");
+                if (swapIntervalPtr != IntPtr.Zero)
                 {
-                    get_proc_address = getProcAddressPtr,
-                    get_proc_address_ctx = IntPtr.Zero
-                };
-
-                IntPtr initParamsPtr = Marshal.AllocHGlobal(Marshal.SizeOf(initParams));
-                Marshal.StructureToPtr(initParams, initParamsPtr, false);
-
-                // API type string
-                IntPtr apiTypePtr = Marshal.StringToHGlobalAnsi("opengl");
-
-                // Create render params as contiguous array in memory
-                var renderParams = new LibMpvRenderInterop.MpvRenderParam[3];
-                renderParams[0] = new LibMpvRenderInterop.MpvRenderParam
-                {
-                    type = LibMpvRenderInterop.MPV_RENDER_PARAM_API_TYPE,
-                    data = apiTypePtr
-                };
-                renderParams[1] = new LibMpvRenderInterop.MpvRenderParam
-                {
-                    type = LibMpvRenderInterop.MPV_RENDER_PARAM_OPENGL_INIT_PARAMS,
-                    data = initParamsPtr
-                };
-                renderParams[2] = new LibMpvRenderInterop.MpvRenderParam
-                {
-                    type = LibMpvRenderInterop.MPV_RENDER_PARAM_INVALID,
-                    data = IntPtr.Zero
-                };
-
-                // Allocate contiguous memory for the array
-                int paramSize = Marshal.SizeOf<LibMpvRenderInterop.MpvRenderParam>();
-                IntPtr paramsPtr = Marshal.AllocHGlobal(paramSize * renderParams.Length);
-
-                // Copy each struct to contiguous memory
-                for (int i = 0; i < renderParams.Length; i++)
-                {
-                    IntPtr offset = IntPtr.Add(paramsPtr, i * paramSize);
-                    Marshal.StructureToPtr(renderParams[i], offset, false);
-                }
-
-                Logger.Log("Parameter array created in contiguous memory");
-                Logger.Log($"  Param 0: type={renderParams[0].type}, data={renderParams[0].data}");
-                Logger.Log($"  Param 1: type={renderParams[1].type}, data={renderParams[1].data}");
-                Logger.Log($"  Param 2: type={renderParams[2].type}, data={renderParams[2].data}");
-
-                // Create render context
-                Logger.Log("Calling mpv_render_context_create...");
-                int result = LibMpvRenderInterop.mpv_render_context_create(
-                    out _renderContext,
-                    _mpvHandle,
-                    paramsPtr);
-
-                Logger.Log($"mpv_render_context_create returned: {result}");
-
-                // Cleanup
-                Marshal.FreeHGlobal(paramsPtr);
-                Marshal.FreeHGlobal(initParamsPtr);
-                Marshal.FreeHGlobal(apiTypePtr);
-
-                if (result < 0)
-                {
-                    Logger.LogError($"mpv_render_context_create failed with error: {result}");
-                    return false;
-                }
-
-                Logger.Log($"Render context created: {_renderContext}");
-
-                // Set update callback
-                _updateCallback = OnMpvRenderUpdate;
-                LibMpvRenderInterop.mpv_render_context_set_update_callback(
-                    _renderContext,
-                    _updateCallback,
-                    IntPtr.Zero);
-
-                Logger.Log("Render update callback set");
-                return true;
-            }
-            catch (Exception ex)
-            {
-                Logger.LogError("CreateMpvRenderContext exception", ex);
-                return false;
-            }
-        }
-
-        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        private delegate IntPtr GetProcAddressDelegate(IntPtr ctx, [MarshalAs(UnmanagedType.LPStr)] string name);
-
-        private IntPtr GetProcAddressImpl(IntPtr ctx, string name)
-        {
-            // wglGetProcAddress only returns extension function pointers, not core functions
-            // For core functions, we need to use GetProcAddress on opengl32.dll
-            IntPtr proc = OpenGLInterop.wglGetProcAddress(name);
-
-            if (proc == IntPtr.Zero || proc == new IntPtr(1) || proc == new IntPtr(2) || proc == new IntPtr(3) || proc == new IntPtr(-1))
-            {
-                // Try to load from opengl32.dll for core functions
-                IntPtr opengl32 = GetModuleHandle("opengl32.dll");
-                if (opengl32 != IntPtr.Zero)
-                {
-                    proc = GetProcAddress(opengl32, name);
+                    var wglSwapInterval = Marshal.GetDelegateForFunctionPointer<WglSwapIntervalEXT>(swapIntervalPtr);
+                    wglSwapInterval(enabled ? 1 : 0);
+                    Logger.Log($"Vsync set to: {enabled}");
                 }
             }
-
-            return proc;
+            catch (Exception ex) { Logger.Log($"Vsync setup failed: {ex.Message}"); }
         }
 
-        [DllImport("kernel32.dll", CharSet = CharSet.Ansi, ExactSpelling = true, SetLastError = true)]
-        private static extern IntPtr GetProcAddress(IntPtr hModule, string procName);
-
-        [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
-        private static extern IntPtr GetModuleHandle(string lpModuleName);
-
-        private void OnMpvRenderUpdate(IntPtr ctx)
+        private void ProcessRender()
         {
-            // Called from mpv thread — check if a new frame is actually available
-            try
+            if (_renderContext == IntPtr.Zero) return;
+
+            // Check if MPV actually needs a redraw
+            ulong flags = LibMpvRenderInterop.mpv_render_context_update(_renderContext);
+            if ((flags & LibMpvRenderInterop.MPV_RENDER_UPDATE_FRAME) != 0)
             {
-                ulong flags = LibMpvRenderInterop.mpv_render_context_update(_renderContext);
-                if ((flags & LibMpvRenderInterop.MPV_RENDER_UPDATE_FRAME) == 0)
-                    return;
-
-                Dispatcher.UIThread.Post(() => RenderNeeded?.Invoke());
-            }
-            catch (Exception ex)
-            {
-                Logger.LogError("OnMpvRenderUpdate exception", ex);
-            }
-        }
-
-        public void Render()
-        {
-            if (_renderContext == IntPtr.Zero || _glContext == IntPtr.Zero)
-                return;
-
-            try
-            {
-                // Make context current
-                OpenGLInterop.wglMakeCurrent(_deviceContext, _glContext);
-
-                // Set viewport and clear
+                // Prepare FBO
                 OpenGLInterop.glViewport(0, 0, _width, _height);
                 OpenGLInterop.glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-                OpenGLInterop.glClear(OpenGLInterop.GL_COLOR_BUFFER_BIT | OpenGLInterop.GL_DEPTH_BUFFER_BIT);
+                OpenGLInterop.glClear(OpenGLInterop.GL_COLOR_BUFFER_BIT);
 
-                // Create FBO params (render to default framebuffer = 0)
-                var fbo = new LibMpvRenderInterop.MpvOpenGLFBO
-                {
-                    fbo = 0,
-                    w = _width,
-                    h = _height,
-                    internal_format = 0
-                };
-
+                var fbo = new LibMpvRenderInterop.MpvOpenGLFBO { fbo = 0, w = _width, h = _height, internal_format = 0 };
                 IntPtr fboPtr = Marshal.AllocHGlobal(Marshal.SizeOf(fbo));
                 Marshal.StructureToPtr(fbo, fboPtr, false);
 
@@ -294,94 +161,148 @@ namespace AniPlayer.UI
                 IntPtr flipYPtr = Marshal.AllocHGlobal(sizeof(int));
                 Marshal.WriteInt32(flipYPtr, flipY);
 
-                // Create render params
                 var renderParams = new[]
                 {
-                    new LibMpvRenderInterop.MpvRenderParam
-                    {
-                        type = LibMpvRenderInterop.MPV_RENDER_PARAM_OPENGL_FBO,
-                        data = fboPtr
-                    },
-                    new LibMpvRenderInterop.MpvRenderParam
-                    {
-                        type = LibMpvRenderInterop.MPV_RENDER_PARAM_FLIP_Y,
-                        data = flipYPtr
-                    },
-                    new LibMpvRenderInterop.MpvRenderParam
-                    {
-                        type = LibMpvRenderInterop.MPV_RENDER_PARAM_INVALID,
-                        data = IntPtr.Zero
-                    }
+                    new LibMpvRenderInterop.MpvRenderParam { type = LibMpvRenderInterop.MPV_RENDER_PARAM_OPENGL_FBO, data = fboPtr },
+                    new LibMpvRenderInterop.MpvRenderParam { type = LibMpvRenderInterop.MPV_RENDER_PARAM_FLIP_Y, data = flipYPtr },
+                    new LibMpvRenderInterop.MpvRenderParam { type = LibMpvRenderInterop.MPV_RENDER_PARAM_INVALID, data = IntPtr.Zero }
                 };
 
-                // Allocate contiguous memory for the render params array
-                int renderParamSize = Marshal.SizeOf<LibMpvRenderInterop.MpvRenderParam>();
-                IntPtr renderParamsPtr = Marshal.AllocHGlobal(renderParamSize * renderParams.Length);
-
+                // Marshal array
+                int paramSize = Marshal.SizeOf<LibMpvRenderInterop.MpvRenderParam>();
+                IntPtr paramsPtr = Marshal.AllocHGlobal(paramSize * renderParams.Length);
                 for (int i = 0; i < renderParams.Length; i++)
-                {
-                    IntPtr offset = IntPtr.Add(renderParamsPtr, i * renderParamSize);
-                    Marshal.StructureToPtr(renderParams[i], offset, false);
-                }
+                    Marshal.StructureToPtr(renderParams[i], IntPtr.Add(paramsPtr, i * paramSize), false);
 
                 // Render
-                LibMpvRenderInterop.mpv_render_context_render(_renderContext, renderParamsPtr);
+                LibMpvRenderInterop.mpv_render_context_render(_renderContext, paramsPtr);
 
-                // Cleanup
-                Marshal.FreeHGlobal(renderParamsPtr);
+                // Cleanup Marshal
+                Marshal.FreeHGlobal(paramsPtr);
                 Marshal.FreeHGlobal(fboPtr);
                 Marshal.FreeHGlobal(flipYPtr);
 
-                // Swap buffers and report to mpv
+                // Swap Buffers (This blocks if VSync is ON, but now it blocks the Background Thread, not UI!)
                 OpenGLInterop.SwapBuffers(_deviceContext);
                 LibMpvRenderInterop.mpv_render_context_report_swap(_renderContext);
             }
-            catch (Exception ex)
+        }
+
+        private void OnMpvRenderUpdate(IntPtr ctx)
+        {
+            // Signal the render loop to wake up
+            _renderSignal.Set();
+        }
+
+        private bool CreateMpvRenderContext()
+        {
+            // Same context creation logic as before, but running on the thread
+            GetProcAddressDelegate getProcAddress = GetProcAddressImpl;
+            IntPtr getProcAddressPtr = Marshal.GetFunctionPointerForDelegate(getProcAddress);
+            _callbackHandle = GCHandle.Alloc(getProcAddress);
+
+            var initParams = new LibMpvRenderInterop.MpvOpenGLInitParams { get_proc_address = getProcAddressPtr };
+            IntPtr initParamsPtr = Marshal.AllocHGlobal(Marshal.SizeOf(initParams));
+            Marshal.StructureToPtr(initParams, initParamsPtr, false);
+
+            IntPtr apiTypePtr = Marshal.StringToHGlobalAnsi("opengl");
+
+            var renderParams = new[]
             {
-                Logger.LogError("Render exception", ex);
-            }
+                new LibMpvRenderInterop.MpvRenderParam { type = LibMpvRenderInterop.MPV_RENDER_PARAM_API_TYPE, data = apiTypePtr },
+                new LibMpvRenderInterop.MpvRenderParam { type = LibMpvRenderInterop.MPV_RENDER_PARAM_OPENGL_INIT_PARAMS, data = initParamsPtr },
+                new LibMpvRenderInterop.MpvRenderParam { type = LibMpvRenderInterop.MPV_RENDER_PARAM_INVALID, data = IntPtr.Zero }
+            };
+
+            int paramSize = Marshal.SizeOf<LibMpvRenderInterop.MpvRenderParam>();
+            IntPtr paramsPtr = Marshal.AllocHGlobal(paramSize * renderParams.Length);
+            for (int i = 0; i < renderParams.Length; i++)
+                Marshal.StructureToPtr(renderParams[i], IntPtr.Add(paramsPtr, i * paramSize), false);
+
+            int result = LibMpvRenderInterop.mpv_render_context_create(out _renderContext, _mpvHandle, paramsPtr);
+
+            Marshal.FreeHGlobal(paramsPtr);
+            Marshal.FreeHGlobal(initParamsPtr);
+            Marshal.FreeHGlobal(apiTypePtr);
+
+            if (result < 0) return false;
+
+            _updateCallback = OnMpvRenderUpdate;
+            LibMpvRenderInterop.mpv_render_context_set_update_callback(_renderContext, _updateCallback, IntPtr.Zero);
+            return true;
+        }
+
+        public void Render() 
+        { 
+            // Manual Render call is no longer needed/used by UI thread
+            // The thread handles it via _renderSignal
+            _renderSignal.Set(); 
         }
 
         public void Resize(int width, int height)
         {
             _width = width;
             _height = height;
-            Logger.Log($"MpvRenderer resized to {width}x{height}");
+            _renderSignal.Set(); // Wake up thread to update viewport next frame
         }
 
-        public void Dispose()
+        private void CleanupGL()
         {
-            if (_disposed)
-                return;
-
-            Logger.Log("Disposing MpvRenderer...");
-
             if (_renderContext != IntPtr.Zero)
             {
                 LibMpvRenderInterop.mpv_render_context_free(_renderContext);
                 _renderContext = IntPtr.Zero;
             }
-
             if (_glContext != IntPtr.Zero)
             {
                 OpenGLInterop.wglMakeCurrent(IntPtr.Zero, IntPtr.Zero);
                 OpenGLInterop.wglDeleteContext(_glContext);
                 _glContext = IntPtr.Zero;
             }
-
             if (_deviceContext != IntPtr.Zero && _windowHandle != IntPtr.Zero)
             {
                 OpenGLInterop.ReleaseDC(_windowHandle, _deviceContext);
                 _deviceContext = IntPtr.Zero;
             }
+        }
 
-            if (_callbackHandle.IsAllocated)
+        public void Dispose()
+        {
+            if (!_isRunning) return;
+            
+            _isRunning = false;
+            _renderSignal.Set(); // Wake up thread so it can exit
+            
+            if (_renderThread != null && _renderThread.IsAlive)
             {
-                _callbackHandle.Free();
+                _renderThread.Join(1000); // Wait for thread to finish cleanup
             }
 
-            _disposed = true;
-            Logger.Log("MpvRenderer disposed");
+            if (_callbackHandle.IsAllocated) _callbackHandle.Free();
+            _renderSignal.Dispose();
+            _initSignal.Dispose();
         }
+
+        // Delegates and Imports helpers (Keep existing GetProcAddressImpl, etc.)
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate bool WglSwapIntervalEXT(int interval);
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        private delegate IntPtr GetProcAddressDelegate(IntPtr ctx, [MarshalAs(UnmanagedType.LPStr)] string name);
+
+        private IntPtr GetProcAddressImpl(IntPtr ctx, string name)
+        {
+            IntPtr proc = OpenGLInterop.wglGetProcAddress(name);
+            if (proc == IntPtr.Zero || proc == new IntPtr(1) || proc == new IntPtr(2) || proc == new IntPtr(3) || proc == new IntPtr(-1))
+            {
+                IntPtr opengl32 = GetModuleHandle("opengl32.dll");
+                if (opengl32 != IntPtr.Zero) proc = GetProcAddress(opengl32, name);
+            }
+            return proc;
+        }
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Ansi, ExactSpelling = true, SetLastError = true)]
+        private static extern IntPtr GetProcAddress(IntPtr hModule, string procName);
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
+        private static extern IntPtr GetModuleHandle(string lpModuleName);
     }
 }

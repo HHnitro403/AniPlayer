@@ -2,7 +2,40 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
-             x:Class="AniPlayer.UI.SeriesCard">
-  Welcome to Avalonia!
+             mc:Ignorable="d" d:DesignWidth="160" d:DesignHeight="280"
+             x:Class="AniPlayer.UI.SeriesCard"
+             Margin="0,0,12,16" Cursor="Hand">
+
+    <Border CornerRadius="8" ClipToBounds="True"
+            Width="155" Background="#1E1E30">
+        <StackPanel>
+            <!-- Cover image -->
+            <Border Height="210" Background="#2A2A3E" CornerRadius="8,8,0,0"
+                    ClipToBounds="True">
+                <Panel>
+                    <Image x:Name="CoverImage" Stretch="UniformToFill"/>
+                    <TextBlock x:Name="CoverPlaceholder"
+                               Text="No Cover"
+                               Foreground="#44FFFFFF" FontSize="12"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center"/>
+                </Panel>
+            </Border>
+            <!-- Title -->
+            <TextBlock x:Name="TitleText"
+                       Text="Series Title"
+                       FontSize="12" FontWeight="SemiBold"
+                       Foreground="#DDDDEE"
+                       TextTrimming="CharacterEllipsis"
+                       MaxLines="2"
+                       Margin="8,6,8,2"
+                       LineHeight="16"/>
+            <!-- Episode count -->
+            <TextBlock x:Name="EpisodeCountText"
+                       Text=""
+                       FontSize="10" Opacity="0.5"
+                       Foreground="#AAAACC"
+                       Margin="8,0,8,8"/>
+        </StackPanel>
+    </Border>
 </UserControl>
