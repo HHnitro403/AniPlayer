@@ -7,7 +7,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
-using System.Timers;
+using Avalonia.Threading; // [Changed] Replaces System.Timers
 using Aniplayer.Core.Helpers;
 using Aniplayer.Core.Interfaces;
 using Aniplayer.Core.Models;
@@ -18,11 +18,13 @@ public class PlayerService : Aniplayer.Core.Interfaces.IPlayerService, IDisposab
 {
     private readonly ILibraryService _libraryService;
     private readonly IWatchProgressService _watchProgressService;
-    
+
     private IntPtr _mpvHandle;
     private bool _mpvInitialized;
-    private System.Timers.Timer? _positionTimer;
-    
+
+    // [Changed] Use DispatcherTimer for UI-safe updates
+    private DispatcherTimer? _positionTimer;
+
     private IReadOnlyList<Episode> _playlist = Array.Empty<Episode>();
     private int _playlistIndex = -1;
 
@@ -60,8 +62,7 @@ public class PlayerService : Aniplayer.Core.Interfaces.IPlayerService, IDisposab
             return Task.CompletedTask;
         }
 
-        // Must be set before mpv_initialize to prevent mpv from creating its own window.
-        // The render context API (libmpv VO) requires this.
+        // Must be set before mpv_initialize
         SetOption("vo", "libmpv");
 
         var initResult = LibMpvInterop.mpv_initialize(_mpvHandle);
@@ -71,11 +72,11 @@ public class PlayerService : Aniplayer.Core.Interfaces.IPlayerService, IDisposab
             return Task.CompletedTask;
         }
 
-        videoHost.InitializeRenderer(_mpvHandle, false); // Assuming vsync is off by default for now
+        videoHost.InitializeRenderer(_mpvHandle, false);
 
         _mpvInitialized = true;
         Logger.Log("[PlayerService] MPV Initialized successfully.");
-        
+
         StartPositionTimer();
         return Task.CompletedTask;
     }
@@ -92,7 +93,7 @@ public class PlayerService : Aniplayer.Core.Interfaces.IPlayerService, IDisposab
         _playlist = playlist;
         await ChangeToEpisodeAsync(playlist[startIndex], isInitialLoad: true);
     }
-    
+
     public void TogglePlayPause()
     {
         if (IsPlaying) Pause();
@@ -110,17 +111,17 @@ public class PlayerService : Aniplayer.Core.Interfaces.IPlayerService, IDisposab
         if (CurrentEpisode == null) return;
         SetOption("pause", "yes");
     }
-    
+
     public async void PlayNext()
     {
         if (_isTransitioning || _playlistIndex >= _playlist.Count - 1)
         {
-            if(!_isTransitioning) PlaybackEnded?.Invoke();
-             return;
+            if (!_isTransitioning) PlaybackEnded?.Invoke();
+            return;
         }
-        
+
         await SaveCurrentProgressAsync(markCompleted: true);
-        
+
         var nextIndex = _playlistIndex + 1;
         Logger.Log($"[PlayerService] Playing next: index {nextIndex}");
         await ChangeToEpisodeAsync(_playlist[nextIndex]);
@@ -148,7 +149,7 @@ public class PlayerService : Aniplayer.Core.Interfaces.IPlayerService, IDisposab
     {
         if (_isTransitioning) return;
         _isTransitioning = true;
-        
+
         if (!isInitialLoad && CurrentEpisode != null)
         {
             Logger.Log($"[PlayerService] Saving final progress for old episode {CurrentEpisode.Id}.");
@@ -158,9 +159,9 @@ public class PlayerService : Aniplayer.Core.Interfaces.IPlayerService, IDisposab
         Logger.Log($"[PlayerService] Changing to new episode {newEpisode.Id}.");
         CurrentEpisode = newEpisode;
         _playlistIndex = _playlist.ToList().FindIndex(e => e.Id == newEpisode.Id);
-        
+
         await LoadFileIntoMpvAsync(newEpisode.FilePath);
-        
+
         _isTransitioning = false;
         EpisodeChanged?.Invoke(newEpisode);
     }
@@ -174,13 +175,34 @@ public class PlayerService : Aniplayer.Core.Interfaces.IPlayerService, IDisposab
         }
 
         SetCommand("loadfile", filePath);
-        
-        await Task.Delay(1500); // Wait for file to load
 
-        UpdatePlayerState(); // Initial state update
+        // [Changed] Replaced "Magic Number" delay (1500ms) with smart polling.
+        // We wait for the 'duration' property to become valid (> 0), indicating metadata is loaded.
+        // This prevents race conditions where chapters/tracks were checked before the file was ready.
+
+        var attempts = 0;
+        const int maxAttempts = 100; // 10 seconds timeout (100 * 100ms)
+
+        while (attempts < maxAttempts)
+        {
+            var duration = GetDoubleProperty("duration");
+            if (duration > 0)
+            {
+                break; // File is ready!
+            }
+            await Task.Delay(100);
+            attempts++;
+        }
+
+        if (attempts >= maxAttempts)
+        {
+            Logger.LogError($"[PlayerService] Timed out waiting for file metadata (duration). Proceeding with limited info.");
+        }
+
+        UpdatePlayerState(); // Update Duration/Position properties now that file is loaded
         await AnalyzeFileChapters();
         await UpdateAudioTracksAsync();
-        
+
         var progress = await _watchProgressService.GetProgressByEpisodeIdAsync(CurrentEpisode!.Id);
         if (progress != null && !progress.IsCompleted && progress.PositionSeconds > 5)
         {
@@ -189,10 +211,11 @@ public class PlayerService : Aniplayer.Core.Interfaces.IPlayerService, IDisposab
         }
     }
 
-    private void OnPositionTimerTick(object? sender, ElapsedEventArgs e)
+    // [Changed] Signature matches DispatcherTimer.Tick (EventHandler)
+    private void OnPositionTimerTick(object? sender, EventArgs e)
     {
         if (CurrentEpisode == null) return;
-        
+
         UpdatePlayerState();
 
         if (GetMpvPropertyString("eof-reached") == "yes")
@@ -200,7 +223,7 @@ public class PlayerService : Aniplayer.Core.Interfaces.IPlayerService, IDisposab
             PlayNext();
             return;
         }
-        
+
         _ = SaveCurrentProgressAsync();
     }
 
@@ -209,8 +232,10 @@ public class PlayerService : Aniplayer.Core.Interfaces.IPlayerService, IDisposab
         IsPlaying = GetMpvPropertyString("pause") == "no";
         Position = GetDoubleProperty("time-pos");
         Duration = GetDoubleProperty("duration");
+
+        // These events are now safe to consume by the UI because DispatcherTimer runs on the UI Thread
         StateChanged?.Invoke();
-        if(Duration > 0) PositionChanged?.Invoke();
+        if (Duration > 0) PositionChanged?.Invoke();
     }
 
     private async Task SaveCurrentProgressAsync(bool force = false, bool markCompleted = false)
@@ -228,13 +253,17 @@ public class PlayerService : Aniplayer.Core.Interfaces.IPlayerService, IDisposab
             await _watchProgressService.UpdateProgressAsync(CurrentEpisode.Id, (int)Position, (int)Duration, force);
         }
     }
-    
+
+    // [Changed] Replaced System.Timers initialization with DispatcherTimer
     private void StartPositionTimer()
     {
-        _positionTimer?.Dispose();
-        _positionTimer = new System.Timers.Timer(500);
-        _positionTimer.Elapsed += OnPositionTimerTick;
-        _positionTimer.AutoReset = true;
+        _positionTimer?.Stop();
+
+        _positionTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(500)
+        };
+        _positionTimer.Tick += OnPositionTimerTick;
         _positionTimer.Start();
     }
 
@@ -279,14 +308,14 @@ public class PlayerService : Aniplayer.Core.Interfaces.IPlayerService, IDisposab
                     var id = track.GetProperty("id").GetInt32();
                     var lang = track.TryGetProperty("lang", out var l) ? l.GetString() : null;
                     var title = track.TryGetProperty("title", out var t) ? t.GetString() : null;
-                    var label = !string.IsNullOrEmpty(lang) && !string.IsNullOrEmpty(title) ? $"{lang} — {title}" 
+                    var label = !string.IsNullOrEmpty(lang) && !string.IsNullOrEmpty(title) ? $"{lang} — {title}"
                         : title ?? lang ?? $"Track {id}";
                     audioTracks.Add((id, label));
                 }
             }
         }
         catch (Exception ex) { Logger.LogError("UpdateAudioTracks failed", ex); }
-        
+
         AudioTracks = audioTracks;
 
         var pref = await _libraryService.GetSeriesTrackPreferenceAsync(CurrentEpisode.SeriesId);
@@ -323,7 +352,10 @@ public class PlayerService : Aniplayer.Core.Interfaces.IPlayerService, IDisposab
     public void Dispose()
     {
         if (_isDisposed) return;
-        _positionTimer?.Dispose();
+
+        // [Changed] Stop the DispatcherTimer
+        _positionTimer?.Stop();
+
         if (_mpvHandle != IntPtr.Zero)
         {
             LibMpvInterop.mpv_terminate_destroy(_mpvHandle);
@@ -338,13 +370,13 @@ public class PlayerService : Aniplayer.Core.Interfaces.IPlayerService, IDisposab
         if (_mpvHandle == IntPtr.Zero) return;
         LibMpvInterop.mpv_set_option_string(_mpvHandle, Encoding.UTF8.GetBytes(name + "\0"), Encoding.UTF8.GetBytes(value + "\0"));
     }
-    
+
     private void SetCommand(string name, string? value = null, string? value2 = null)
     {
         if (_mpvHandle == IntPtr.Zero) return;
         var args = new List<string?> { name, value, value2 }.Where(s => s != null).ToList();
         var cmd = args.Select(s => Marshal.StringToHGlobalAnsi(s!)).Concat(new[] { IntPtr.Zero }).ToArray();
-        
+
         try { LibMpvInterop.mpv_command(_mpvHandle, cmd); }
         finally { foreach (var ptr in cmd) if (ptr != IntPtr.Zero) Marshal.FreeHGlobal(ptr); }
     }
