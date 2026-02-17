@@ -245,6 +245,17 @@ public class ScannerService : IScannerService
     private async Task PruneDeletedEpisodesAsync(int libraryId, CancellationToken ct)
     {
         Report("Pruning deleted files...");
+
+        // [Fix] Safety Guard: Ensure Library Root is still accessible.
+        // If the network dropped mid-scan, 'Scan' might have just skipped files, 
+        // but 'Prune' would incorrectly delete everything.
+        var lib = await _library.GetLibraryByIdAsync(libraryId);
+        if (lib == null || !Directory.Exists(lib.Path))
+        {
+            Report($"[CRITICAL WARNING] Library path '{lib?.Path}' is inaccessible. ABORTING PRUNE to prevent data loss.");
+            return;
+        }
+
         var allSeries = await _library.GetSeriesByLibraryIdAsync(libraryId);
         var prunedEpisodes = 0;
         var prunedSeries = 0;
@@ -252,6 +263,15 @@ public class ScannerService : IScannerService
         foreach (var series in allSeries)
         {
             ct.ThrowIfCancellationRequested();
+
+            // [Fix] Secondary Safety: Check if the series drive/root is available before checking the specific folder.
+            // If 'D:\Anime' is the library, and 'D:\' is gone, don't delete 'Naruto'.
+            if (!Directory.Exists(Path.GetPathRoot(series.Path)))
+            {
+                Report($"  Skipping prune for '{series.FolderName}': Drive root inaccessible.");
+                continue;
+            }
+
             var episodes = await _library.GetEpisodesBySeriesIdAsync(series.Id);
             foreach (var ep in episodes)
             {

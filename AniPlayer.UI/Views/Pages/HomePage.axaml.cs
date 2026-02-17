@@ -10,6 +10,7 @@ using Aniplayer.Core.Models;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Globalization;
 using System.Linq;
 
 namespace AniPlayer.UI;
@@ -203,7 +204,8 @@ public partial class HomePage : UserControl
         {
             Height = 3,
             VerticalAlignment = VerticalAlignment.Bottom,
-            ColumnDefinitions = new ColumnDefinitions($"{progressPercent:F4}*,{(1 - progressPercent):F4}*"),
+            ColumnDefinitions = new ColumnDefinitions(
+                string.Format(CultureInfo.InvariantCulture, "{0:F4}*,{1:F4}*", progressPercent, 1 - progressPercent)),
         };
         var fillBar = new Border
         {

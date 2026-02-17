@@ -172,7 +172,7 @@ public static class Queries
                e.episode_number AS EpisodeNumber, e.episode_type AS EpisodeType,
                e.duration_seconds AS DurationSeconds, e.thumbnail_path AS ThumbnailPath,
                e.anilist_ep_id AS AnilistEpId, e.created_at AS CreatedAt,
-               wp.id AS Id, wp.episode_id AS EpisodeId, wp.position_seconds AS PositionSeconds,
+               wp.id AS WpId, wp.episode_id AS EpisodeId, wp.position_seconds AS PositionSeconds,
                wp.duration_seconds AS DurationSeconds, wp.is_completed AS IsCompleted,
                wp.last_watched_at AS LastWatchedAt
         FROM WatchProgress wp

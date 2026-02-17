@@ -60,7 +60,7 @@ public class WatchProgressService : IWatchProgressService
             Queries.GetRecentlyWatched,
             (episode, progress) => (episode, progress),
             new { limit },
-            splitOn: "Id");
+            splitOn: "WpId");
         return results;
     }
 }
