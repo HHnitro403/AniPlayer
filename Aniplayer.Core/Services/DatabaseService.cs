@@ -38,13 +38,14 @@ public class DatabaseService : IDatabaseService
     {
         _logger.LogInformation("DatabaseService.InitializeAsync");
 
-        // Auto-backup existing database before init (keeps last 3 backups)
-        BackupDatabase();
+        // [Changed] Await the new async backup method
+        await BackupDatabaseAsync();
 
         await _initializer.InitializeAsync();
     }
 
-    private void BackupDatabase()
+    // [Changed] Method is now Async and uses SQLite VACUUM INTO
+    private async Task BackupDatabaseAsync()
     {
         if (!File.Exists(AppConstants.DbPath))
             return;
@@ -56,10 +57,37 @@ public class DatabaseService : IDatabaseService
 
             var backupPath = Path.Combine(backupDir,
                 $"aniplayer-{DateTime.Now:yyyyMMdd-HHmmss}.db");
-            File.Copy(AppConstants.DbPath, backupPath, overwrite: true);
+
+            // [Fix] Use VACUUM INTO for atomic, safe WAL-mode backups.
+            // File.Copy is unsafe because it misses the -wal file content.
+            using (var sourceConnection = new SqliteConnection(_connectionString))
+            {
+                await sourceConnection.OpenAsync();
+
+                using var cmd = sourceConnection.CreateCommand();
+                // Note: VACUUM INTO expects a string literal for the path. 
+                // We escape single quotes just to be safe, though our timestamped path is generally safe.
+                var safePath = backupPath.Replace("'", "''");
+                cmd.CommandText = $"VACUUM INTO '{safePath}';";
+
+                await cmd.ExecuteNonQueryAsync();
+            }
+
             _logger.LogInformation("Database backed up to {Path}", backupPath);
 
-            // Keep only the 3 most recent backups
+            // Cleanup: Keep only the 3 most recent backups
+            CleanupOldBackups(backupDir);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Database backup failed — continuing without backup");
+        }
+    }
+
+    private void CleanupOldBackups(string backupDir)
+    {
+        try
+        {
             var backups = Directory.GetFiles(backupDir, "aniplayer-*.db")
                 .OrderByDescending(f => f)
                 .Skip(3)
@@ -73,7 +101,7 @@ public class DatabaseService : IDatabaseService
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Database backup failed — continuing without backup");
+            _logger.LogWarning("Failed to clean up old backups: {Message}", ex.Message);
         }
     }
 }
