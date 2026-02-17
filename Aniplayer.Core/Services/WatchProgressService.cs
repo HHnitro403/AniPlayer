@@ -8,6 +8,8 @@ namespace Aniplayer.Core.Services;
 public class WatchProgressService : IWatchProgressService
 {
     private readonly IDatabaseService _db;
+    private DateTime _lastSaveTime = DateTime.MinValue;
+    private static readonly TimeSpan SaveInterval = TimeSpan.FromSeconds(5);
 
     public WatchProgressService(IDatabaseService db)
     {
@@ -28,8 +30,13 @@ public class WatchProgressService : IWatchProgressService
             Queries.GetProgressForSeries, new { seriesId });
     }
 
-    public async Task SaveProgressAsync(int episodeId, int positionSeconds, int? durationSeconds)
+    public async Task UpdateProgressAsync(int episodeId, int positionSeconds, int durationSeconds, bool forceSave = false)
     {
+        if (!forceSave && DateTime.UtcNow - _lastSaveTime < SaveInterval)
+        {
+            return;
+        }
+
         using var conn = _db.CreateConnection();
         await conn.ExecuteAsync(Queries.UpsertWatchProgress, new
         {
@@ -37,6 +44,7 @@ public class WatchProgressService : IWatchProgressService
             positionSeconds,
             durationSeconds
         });
+        _lastSaveTime = DateTime.UtcNow;
     }
 
     public async Task MarkCompletedAsync(int episodeId)

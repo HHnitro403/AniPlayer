@@ -15,6 +15,14 @@ public class Episode
     public int? AnilistEpId { get; set; }
     public string CreatedAt { get; set; } = string.Empty;
 
+    // Populated by chapter detection
+    public double IntroStart { get; set; } = -1;
+    public double IntroEnd { get; set; } = -1;
+    public double OutroStart { get; set; } = -1;
+    public double OutroEnd { get; set; } = -1;
+    public bool HasIntro => IntroStart >= 0 && IntroEnd > IntroStart;
+    public bool HasOutro => OutroStart >= 0;
+
     /// <summary>
     /// Display name shown in the episode list. Includes subfolder context for
     /// multi-season shows, e.g. "S1 Episode 3" or "S2 - OVA Episode 1".

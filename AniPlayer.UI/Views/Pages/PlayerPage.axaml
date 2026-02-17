@@ -6,10 +6,10 @@
              mc:Ignorable="d" d:DesignWidth="960" d:DesignHeight="600"
              x:Class="AniPlayer.UI.PlayerPage">
 
-    <Grid x:Name="RootGrid" RowDefinitions="*,Auto">
+    <Grid x:Name="RootGrid">
 
         <!-- Video area -->
-        <Grid x:Name="VideoContainer" Background="Black">
+        <Grid x:Name="VideoContainer" Background="Black" PointerMoved="OnPlayerPointerMoved">
             <local:VideoHost x:Name="VideoHostControl"/>
             <TextBlock x:Name="PlaceholderText"
                        Text="Open a video file to start playback"
@@ -18,11 +18,33 @@
                        HorizontalAlignment="Center"
                        VerticalAlignment="Center"
                        TextAlignment="Center"/>
+
+            <Button x:Name="SkipOverlayButton"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Bottom"
+                    Margin="0,0,30,120"
+                    Padding="15,10"
+                    Background="#CC000000"
+                    Foreground="White"
+                    CornerRadius="5"
+                    IsVisible="False"
+                    Click="OnSkipButtonClick">
+                <Button.Styles>
+                    <Style Selector="Button:pointerover /template/ ContentPresenter">
+                        <Setter Property="Background" Value="#E6202020"/>
+                        <Setter Property="Foreground" Value="#4CC2FF"/>
+                    </Style>
+                </Button.Styles>
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <PathIcon Data="{StaticResource fast_forward_regular}" Width="16" Height="16"/>
+                    <TextBlock x:Name="SkipButtonText" Text="Skip Intro" FontWeight="SemiBold"/>
+                </StackPanel>
+            </Button>
         </Grid>
 
         <!-- Controls bar below the video -->
         <Border x:Name="ControlsBar"
-                Grid.Row="1"
+                VerticalAlignment="Bottom"
                 Background="#1A1A2E"
                 Padding="16,10">
             <StackPanel Spacing="8">
