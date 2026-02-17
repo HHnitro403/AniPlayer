@@ -18,7 +18,7 @@ namespace AniPlayer.UI;
 public partial class LibraryPage : UserControl
 {
     public event Action<string>? FolderAdded;
-    public event Action<int>? SeriesSelected;
+    public event Action<string>? SeriesSelected;
 
     private List<Series> _allSeries = new();
 
@@ -37,7 +37,7 @@ public partial class LibraryPage : UserControl
         _allSeries = series.ToList();
         Logger.Log($"[LibraryPage] DisplaySeries called with {_allSeries.Count} series", LogRegion.UI);
         foreach (var s in _allSeries)
-            Logger.Log($"[LibraryPage]   Series ID={s.Id}, display='{s.DisplayTitle}', folder='{s.FolderName}'", LogRegion.UI);
+            Logger.Log($"[LibraryPage]   Series ID={s.Id}, group='{s.SeriesGroupName}', season={s.SeasonNumber}, folder='{s.FolderName}'", LogRegion.UI);
         ApplyFilter();
     }
 
@@ -47,11 +47,12 @@ public partial class LibraryPage : UserControl
         var filtered = string.IsNullOrEmpty(query)
             ? _allSeries
             : _allSeries.Where(s =>
+                (s.SeriesGroupName != null && s.SeriesGroupName.Contains(query, StringComparison.OrdinalIgnoreCase)) ||
                 s.DisplayTitle.Contains(query, StringComparison.OrdinalIgnoreCase)).ToList();
 
-        // Group series that share a base name (e.g. "High School DxD S1" + "S2" + "S3")
+        // Group series by the new SeriesGroupName property
         var groups = filtered
-            .GroupBy(s => GetBaseName(s.DisplayTitle), StringComparer.OrdinalIgnoreCase)
+            .GroupBy(s => s.SeriesGroupName, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
         SeriesGrid.ItemsSource = null;
@@ -59,36 +60,37 @@ public partial class LibraryPage : UserControl
 
         foreach (var group in groups)
         {
-            var members = group.OrderBy(s => GetSeasonNumber(s.Path)).ToList();
+            if (string.IsNullOrEmpty(group.Key)) continue;
+
+            var members = group.OrderBy(s => s.SeasonNumber).ToList();
             // Pick representative: prefer the one with a cover / AniList metadata
             var representative = members.FirstOrDefault(s => s.CoverImagePath != null) ?? members[0];
-            var seasonCount = members.Count;
-            cards.Add(CreateSeriesCard(representative, seasonCount));
+            cards.Add(CreateSeriesCard(representative, group.Key, members.Count));
         }
 
         SeriesGrid.ItemsSource = cards;
 
-        var seriesCount = filtered.Count;
+        var seriesCount = groups.Count;
         SeriesCountText.Text = seriesCount == 1 ? "1 series" : $"{seriesCount} series";
         EmptyState.IsVisible = seriesCount == 0;
         SeriesGrid.IsVisible = seriesCount > 0;
 
-        Logger.Log($"[LibraryPage] ApplyFilter: query='{query}', total={_allSeries.Count}, filtered={seriesCount}, groups={groups.Count}, cards={cards.Count}", LogRegion.UI);
+        Logger.Log($"[LibraryPage] ApplyFilter: query='{query}', total={_allSeries.Count}, filtered={filtered.Count}, groups={groups.Count}, cards={cards.Count}", LogRegion.UI);
         Logger.Log($"[LibraryPage] EmptyState.IsVisible={EmptyState.IsVisible}, SeriesGrid.IsVisible={SeriesGrid.IsVisible}", LogRegion.UI);
     }
 
-    private Border CreateSeriesCard(Series series, int seasonCount = 1)
+    private Border CreateSeriesCard(Series representative, string seriesGroupName, int seasonCount = 1)
     {
         var stack = new StackPanel { Spacing = 6, Width = 150 };
 
         // Cover image or placeholder (wrapped in Panel for badge overlay)
         var coverPanel = new Panel { Height = 200 };
 
-        if (!string.IsNullOrEmpty(series.CoverImagePath) && File.Exists(series.CoverImagePath))
+        if (!string.IsNullOrEmpty(representative.CoverImagePath) && File.Exists(representative.CoverImagePath))
         {
             var img = new Image
             {
-                Source = new Bitmap(series.CoverImagePath),
+                Source = new Bitmap(representative.CoverImagePath),
                 Height = 200,
                 Stretch = Stretch.UniformToFill,
             };
@@ -109,8 +111,8 @@ public partial class LibraryPage : UserControl
                 Background = new SolidColorBrush(Color.FromArgb(40, 255, 255, 255)),
                 Child = new TextBlock
                 {
-                    Text = series.DisplayTitle.Length > 0
-                        ? series.DisplayTitle[0].ToString()
+                    Text = seriesGroupName.Length > 0
+                        ? seriesGroupName[0].ToString()
                         : "?",
                     FontSize = 36,
                     Opacity = 0.3,
@@ -145,14 +147,10 @@ public partial class LibraryPage : UserControl
 
         stack.Children.Add(coverPanel);
 
-        // Title — show base name for grouped series
-        var displayName = seasonCount > 1
-            ? GetBaseName(series.DisplayTitle)
-            : series.DisplayTitle;
-
+        // Title
         stack.Children.Add(new TextBlock
         {
-            Text = displayName,
+            Text = seriesGroupName,
             FontWeight = FontWeight.SemiBold,
             FontSize = 13,
             TextTrimming = TextTrimming.CharacterEllipsis,
@@ -169,34 +167,9 @@ public partial class LibraryPage : UserControl
             Child = stack,
         };
 
-        var seriesId = series.Id;
-        card.PointerPressed += (_, _) => SeriesSelected?.Invoke(seriesId);
+        card.PointerPressed += (_, _) => SeriesSelected?.Invoke(seriesGroupName);
 
         return card;
-    }
-
-    /// <summary>
-    /// Strips season suffixes to get the base series name for grouping.
-    /// "High School DxD S2" → "High School DxD"
-    /// "Attack on Titan Season 3" → "Attack on Titan"
-    /// </summary>
-    private static string GetBaseName(string title)
-    {
-        var cleaned = Regex.Replace(title, @"\s+S(?:eason\s*)?\d+\s*$", "", RegexOptions.IgnoreCase);
-        return cleaned.Trim();
-    }
-
-    /// <summary>
-    /// Extracts a season number from a series path for sort ordering.
-    /// ".../High School DxD S2" → 2
-    /// </summary>
-    private static int GetSeasonNumber(string path)
-    {
-        var folder = System.IO.Path.GetFileName(path.TrimEnd(
-            System.IO.Path.DirectorySeparatorChar,
-            System.IO.Path.AltDirectorySeparatorChar));
-        var match = Regex.Match(folder ?? "", @"S(?:eason\s*)?(\d+)", RegexOptions.IgnoreCase);
-        return match.Success && int.TryParse(match.Groups[1].Value, out var num) ? num : 0;
     }
 
     private async void AddFolderButton_Click(object? sender, RoutedEventArgs e)

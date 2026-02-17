@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -100,7 +101,7 @@ public class MetadataService : IMetadataService
         series.TitleRomaji = metadata.TitleRomaji;
         series.TitleEnglish = metadata.TitleEnglish;
         series.TitleNative = metadata.TitleNative;
-        series.Synopsis = metadata.Synopsis;
+        series.Synopsis = SanitizeSynopsis(metadata.Synopsis);
         series.Genres = metadata.GenresJson;
         series.AverageScore = metadata.AverageScore;
         series.TotalEpisodes = metadata.TotalEpisodes;
@@ -164,6 +165,28 @@ public class MetadataService : IMetadataService
         }
 
         _logger.LogInformation("Batch metadata fetch complete");
+    }
+
+    private static string? SanitizeSynopsis(string? rawSynopsis)
+    {
+        if (string.IsNullOrWhiteSpace(rawSynopsis))
+            return null;
+
+        var sanitized = rawSynopsis;
+
+        // Replace <br> with newlines
+        sanitized = Regex.Replace(sanitized, @"<br\s*/?>", Environment.NewLine, RegexOptions.IgnoreCase);
+
+        // Strip all other HTML tags
+        sanitized = Regex.Replace(sanitized, @"<[^>]+>", string.Empty);
+
+        // Strip AniList's markdown-like tags (e.g. [i], [/i])
+        sanitized = Regex.Replace(sanitized, @"\[/?\w+\]", string.Empty);
+
+        // Decode HTML entities (&quot;, &amp;, etc.)
+        sanitized = WebUtility.HtmlDecode(sanitized);
+
+        return sanitized.Trim();
     }
 
     private static string CleanTitleForSearch(string title)

@@ -7,6 +7,14 @@ public static class FileHelper
     public static bool IsSupportedVideo(string filePath) =>
         AppConstants.SupportedExtensions.Contains(Path.GetExtension(filePath));
 
+    public static bool ContainsVideoFiles(string directory)
+    {
+        if (!Directory.Exists(directory))
+            return false;
+
+        return Directory.EnumerateFiles(directory).Any(IsSupportedVideo);
+    }
+
     public static async Task<bool> WaitUntilReadyAsync(string filePath,
         CancellationToken ct = default)
     {

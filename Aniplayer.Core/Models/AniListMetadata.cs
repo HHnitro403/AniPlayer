@@ -16,6 +16,6 @@ public class AniListMetadata
 
     public string? GenresJson =>
         Genres is { Count: > 0 }
-            ? System.Text.Json.JsonSerializer.Serialize(Genres)
+            ? string.Join(", ", Genres)
             : null;
 }

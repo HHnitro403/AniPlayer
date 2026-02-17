@@ -115,10 +115,10 @@ namespace AniPlayer.UI
             // HomePage
             _homePage.PlayFileRequested   += PlayFile;
             _homePage.AddLibraryRequested += () => NavigateTo("Settings");
-            _homePage.SeriesSelected += id =>
+            _homePage.SeriesSelected += seriesId =>
             {
-                Logger.Log($"[MainWindow] HomePage.SeriesSelected: ID={id}");
-                _ = OpenSeriesAsync(id);
+                Logger.Log($"[MainWindow] HomePage.SeriesSelected: ID={seriesId}");
+                _ = OpenSeriesAsync(seriesId);
             };
             _homePage.ResumeEpisodeRequested += id =>
             {
@@ -127,10 +127,10 @@ namespace AniPlayer.UI
             };
 
             // LibraryPage
-            _libraryPage.SeriesSelected += id =>
+            _libraryPage.SeriesSelected += groupName =>
             {
-                Logger.Log($"[MainWindow] SeriesSelected: ID={id}");
-                _ = OpenSeriesAsync(id);
+                Logger.Log($"[MainWindow] SeriesSelected: Group='{groupName}'");
+                _ = OpenSeriesAsync(groupName);
             };
             _libraryPage.FolderAdded += path =>
             {
@@ -144,6 +144,11 @@ namespace AniPlayer.UI
             {
                 Logger.Log($"[MainWindow] EpisodePlayRequested: {filePath}");
                 PlayFile(filePath);
+            };
+            _showInfoPage.MetadataRefreshRequested += () =>
+            {
+                Logger.Log($"[MainWindow] MetadataRefreshRequested, refreshing all pages");
+                _ = RefreshPagesAsync();
             };
 
             // PlayerPage
@@ -259,28 +264,56 @@ namespace AniPlayer.UI
             }
         }
 
-        private async Task OpenSeriesAsync(int seriesId)
+        private async Task OpenSeriesAsync(string seriesGroupName)
         {
             try
             {
-                Logger.Log($"[OpenSeries] Loading series {seriesId}...");
-                var series = await _libraryService.GetSeriesByIdAsync(seriesId);
-                if (series == null)
+                Logger.Log($"[OpenSeries] Loading series group '{seriesGroupName}'...");
+                var seriesGroup = (await _libraryService.GetSeriesByGroupNameAsync(seriesGroupName)).ToList();
+
+                if (seriesGroup.Count == 0)
                 {
-                    Logger.Log($"[OpenSeries] ERROR: Series {seriesId} not found in DB");
+                    Logger.Log($"[OpenSeries] ERROR: Series group '{seriesGroupName}' not found in DB");
                     return;
                 }
 
-                var episodes = (await _libraryService.GetEpisodesBySeriesIdAsync(seriesId)).ToList();
-                _currentEpisodes = episodes;
-                Logger.Log($"[OpenSeries] Loaded series '{series.DisplayTitle}' with {episodes.Count} episode(s)");
+                // Get all episodes for all series in the group
+                var allEpisodes = new List<Episode>();
+                foreach (var series in seriesGroup.OrderBy(s => s.SeasonNumber))
+                {
+                    var episodes = (await _libraryService.GetEpisodesBySeriesIdAsync(series.Id)).ToList();
+                    allEpisodes.AddRange(episodes.OrderBy(e => e.EpisodeNumber));
+                }
+                _currentEpisodes = allEpisodes; // This is the master playlist
 
-                _showInfoPage.LoadSeriesData(series, episodes);
+                Logger.Log($"[OpenSeries] Loaded group '{seriesGroupName}' with {seriesGroup.Count} season(s) and {allEpisodes.Count} total episode(s)");
+
+                _showInfoPage.LoadSeriesData(seriesGroup, allEpisodes);
                 NavigateTo("ShowInfo");
             }
             catch (Exception ex)
             {
                 Logger.Log($"[OpenSeries] Failed: {ex.Message}");
+            }
+        }
+
+        private async Task OpenSeriesAsync(int seriesId)
+        {
+            try
+            {
+                var series = await _libraryService.GetSeriesByIdAsync(seriesId);
+                if (series?.SeriesGroupName != null)
+                {
+                    await OpenSeriesAsync(series.SeriesGroupName);
+                }
+                else
+                {
+                    Logger.Log($"[OpenSeries] ERROR: Series {seriesId} has no group name or does not exist.");
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Log($"[OpenSeries] Failed to open single series {seriesId}: {ex.Message}");
             }
         }
 

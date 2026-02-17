@@ -23,6 +23,7 @@ public static class Queries
 
     public const string GetAllSeries = @"
         SELECT id AS Id, library_id AS LibraryId, folder_name AS FolderName, path AS Path,
+               series_group_name AS SeriesGroupName, season_number AS SeasonNumber,
                anilist_id AS AnilistId, title_romaji AS TitleRomaji, title_english AS TitleEnglish,
                title_native AS TitleNative, cover_image_path AS CoverImagePath, synopsis AS Synopsis,
                genres AS Genres, average_score AS AverageScore, total_episodes AS TotalEpisodes,
@@ -32,6 +33,7 @@ public static class Queries
 
     public const string GetSeriesById = @"
         SELECT id AS Id, library_id AS LibraryId, folder_name AS FolderName, path AS Path,
+               series_group_name AS SeriesGroupName, season_number AS SeasonNumber,
                anilist_id AS AnilistId, title_romaji AS TitleRomaji, title_english AS TitleEnglish,
                title_native AS TitleNative, cover_image_path AS CoverImagePath, synopsis AS Synopsis,
                genres AS Genres, average_score AS AverageScore, total_episodes AS TotalEpisodes,
@@ -40,6 +42,7 @@ public static class Queries
 
     public const string GetSeriesByLibraryId = @"
         SELECT id AS Id, library_id AS LibraryId, folder_name AS FolderName, path AS Path,
+               series_group_name AS SeriesGroupName, season_number AS SeasonNumber,
                anilist_id AS AnilistId, title_romaji AS TitleRomaji, title_english AS TitleEnglish,
                title_native AS TitleNative, cover_image_path AS CoverImagePath, synopsis AS Synopsis,
                genres AS Genres, average_score AS AverageScore, total_episodes AS TotalEpisodes,
@@ -49,14 +52,25 @@ public static class Queries
 
     public const string GetSeriesByPath = @"
         SELECT id AS Id, library_id AS LibraryId, folder_name AS FolderName, path AS Path,
+               series_group_name AS SeriesGroupName, season_number AS SeasonNumber,
                anilist_id AS AnilistId, title_romaji AS TitleRomaji, title_english AS TitleEnglish,
                title_native AS TitleNative, cover_image_path AS CoverImagePath, synopsis AS Synopsis,
                genres AS Genres, average_score AS AverageScore, total_episodes AS TotalEpisodes,
                status AS Status, metadata_fetched_at AS MetadataFetchedAt, created_at AS CreatedAt
         FROM Series WHERE path = @path";
 
+    public const string GetSeriesByGroupName = @"
+        SELECT id AS Id, library_id AS LibraryId, folder_name AS FolderName, path AS Path,
+               series_group_name AS SeriesGroupName, season_number AS SeasonNumber,
+               anilist_id AS AnilistId, title_romaji AS TitleRomaji, title_english AS TitleEnglish,
+               title_native AS TitleNative, cover_image_path AS CoverImagePath, synopsis AS Synopsis,
+               genres AS Genres, average_score AS AverageScore, total_episodes AS TotalEpisodes,
+               status AS Status, metadata_fetched_at AS MetadataFetchedAt, created_at AS CreatedAt
+        FROM Series WHERE series_group_name = @seriesGroupName";
+
     public const string GetRecentlyAddedSeries = @"
         SELECT id AS Id, library_id AS LibraryId, folder_name AS FolderName, path AS Path,
+               series_group_name AS SeriesGroupName, season_number AS SeasonNumber,
                anilist_id AS AnilistId, title_romaji AS TitleRomaji, title_english AS TitleEnglish,
                title_native AS TitleNative, cover_image_path AS CoverImagePath, synopsis AS Synopsis,
                genres AS Genres, average_score AS AverageScore, total_episodes AS TotalEpisodes,
@@ -66,9 +80,12 @@ public static class Queries
         ORDER BY created_at DESC";
 
     public const string InsertSeries = @"
-        INSERT INTO Series (library_id, folder_name, path)
-        VALUES (@LibraryId, @FolderName, @Path)
-        ON CONFLICT(path) DO UPDATE SET folder_name = excluded.folder_name
+        INSERT INTO Series (library_id, folder_name, path, series_group_name, season_number)
+        VALUES (@LibraryId, @FolderName, @Path, @SeriesGroupName, @SeasonNumber)
+        ON CONFLICT(path) DO UPDATE SET
+            folder_name = excluded.folder_name,
+            series_group_name = excluded.series_group_name,
+            season_number = excluded.season_number
         RETURNING id";
 
     public const string UpdateSeriesMetadata = @"

@@ -78,6 +78,13 @@ public class LibraryService : ILibraryService
             Queries.GetSeriesByPath, new { path });
     }
 
+    public async Task<IEnumerable<Series>> GetSeriesByGroupNameAsync(string seriesGroupName)
+    {
+        using var conn = _db.CreateConnection();
+        return await conn.QueryAsync<Series>(
+            Queries.GetSeriesByGroupName, new { seriesGroupName });
+    }
+
     public async Task<IEnumerable<Series>> GetRecentlyAddedSeriesAsync(int days)
     {
         using var conn = _db.CreateConnection();
@@ -85,11 +92,19 @@ public class LibraryService : ILibraryService
             Queries.GetRecentlyAddedSeries, new { daysOffset = $"-{days} days" });
     }
 
-    public async Task<int> UpsertSeriesAsync(int libraryId, string folderName, string path)
+    public async Task<int> UpsertSeriesAsync(int libraryId, string folderName, string path, string seriesGroupName, int seasonNumber)
     {
         using var conn = _db.CreateConnection();
         return await conn.QuerySingleAsync<int>(
-            Queries.InsertSeries, new { LibraryId = libraryId, FolderName = folderName, Path = path });
+            Queries.InsertSeries,
+            new
+            {
+                LibraryId = libraryId,
+                FolderName = folderName,
+                Path = path,
+                SeriesGroupName = seriesGroupName,
+                SeasonNumber = seasonNumber
+            });
     }
 
     public async Task UpdateSeriesMetadataAsync(Series series)

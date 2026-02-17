@@ -8,6 +8,8 @@ public class Series
     public int LibraryId { get; set; }
     public string FolderName { get; set; } = string.Empty;
     public string Path { get; set; } = string.Empty;
+    public string SeriesGroupName { get; set; } = string.Empty;
+    public int SeasonNumber { get; set; }
     public int? AnilistId { get; set; }
     public string? TitleRomaji { get; set; }
     public string? TitleEnglish { get; set; }

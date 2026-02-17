@@ -68,6 +68,22 @@ public class DatabaseInitializer
                 "ALTER TABLE TrackPreferences ADD COLUMN preferred_audio_track_id INTEGER;").ConfigureAwait(false);
         }
         catch (SqliteException) { /* column already exists — safe to ignore */ }
+
+        // Add series_group_name column
+        try
+        {
+            await connection.ExecuteAsync(
+                "ALTER TABLE Series ADD COLUMN series_group_name TEXT;").ConfigureAwait(false);
+        }
+        catch (SqliteException) { /* column already exists — safe to ignore */ }
+
+        // Add season_number column
+        try
+        {
+            await connection.ExecuteAsync(
+                "ALTER TABLE Series ADD COLUMN season_number INTEGER NOT NULL DEFAULT 1;").ConfigureAwait(false);
+        }
+        catch (SqliteException) { /* column already exists — safe to ignore */ }
     }
 
     private static class Schema
@@ -86,6 +102,8 @@ public class DatabaseInitializer
                 library_id           INTEGER NOT NULL REFERENCES Libraries(id) ON DELETE CASCADE,
                 folder_name          TEXT NOT NULL,
                 path                 TEXT NOT NULL UNIQUE,
+                series_group_name    TEXT,
+                season_number        INTEGER NOT NULL DEFAULT 1,
                 anilist_id           INTEGER,
                 title_romaji         TEXT,
                 title_english        TEXT,

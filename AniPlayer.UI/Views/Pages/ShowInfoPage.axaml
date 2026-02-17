@@ -2,8 +2,12 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:models="using:Aniplayer.Core.Models"
+             xmlns:controls="using:AniPlayer.UI.Views.Controls"
+             xmlns:local="using:AniPlayer.UI"
              mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="700"
-             x:Class="AniPlayer.UI.ShowInfoPage">
+             x:Class="AniPlayer.UI.ShowInfoPage"
+             x:DataType="local:ShowInfoPage">
 
     <ScrollViewer HorizontalScrollBarVisibility="Disabled">
         <StackPanel Margin="32,24" Spacing="24">
@@ -15,6 +19,7 @@
                         Click="BackButton_Click"/>
                 <Button x:Name="RefreshMetadataButton" Content="Refresh Metadata"
                         Padding="12,6"
+                        IsVisible="False"
                         Click="RefreshMetadata_Click"/>
             </StackPanel>
 
@@ -61,21 +66,39 @@
             <Separator Margin="0,8"/>
 
             <!-- Episode list -->
-            <StackPanel Spacing="12">
-                <Grid ColumnDefinitions="*,Auto">
-                    <TextBlock Text="Episodes" FontSize="20" FontWeight="SemiBold"
-                               VerticalAlignment="Center"/>
-                    <ComboBox x:Name="EpisodeTypeFilter" Grid.Column="1"
-                              SelectedIndex="0" MinWidth="140">
-                        <ComboBoxItem Content="All"/>
-                        <ComboBoxItem Content="Episodes"/>
-                        <ComboBoxItem Content="Specials"/>
-                        <ComboBoxItem Content="OVA"/>
-                    </ComboBox>
-                </Grid>
+            <ItemsControl x:Name="SeasonListControl" ItemsSource="{Binding SeasonGroups}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="local:ShowInfoPage+SeasonGroup">
+                        <StackPanel Margin="0,0,0,10">
+                            <Expander IsExpanded="{Binding IsExpanded}"
+                                      HorizontalAlignment="Stretch"
+                                      Background="#1E1E1E"
+                                      BorderThickness="0"
+                                      CornerRadius="5">
+                                <Expander.Header>
+                                    <TextBlock Text="{Binding Header}"
+                                               FontSize="18"
+                                               FontWeight="Bold"
+                                               Foreground="#E0E0E0"/>
+                                </Expander.Header>
 
-                <StackPanel x:Name="EpisodeListPanel" Spacing="4"/>
-            </StackPanel>
+                                <ItemsControl ItemsSource="{Binding Episodes}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="models:Episode">
+                                            <controls:EpisodeRow Margin="0,2" PointerPressed="OnEpisodePlayRequest" />
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </Expander>
+
+                            <Border Height="1"
+                                    Background="White"
+                                    Opacity="0.1"
+                                    Margin="10,15,10,5"/>
+                        </StackPanel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
 
         </StackPanel>
     </ScrollViewer>

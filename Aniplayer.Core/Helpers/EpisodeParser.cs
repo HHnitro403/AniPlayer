@@ -137,6 +137,41 @@ public static class EpisodeParser
         return null;
     }
 
+    public static bool TryParseSeasonFromFolder(string folderName, out int seasonNumber)
+    {
+        seasonNumber = 1;
+
+        // 1. Detect Specials / OVAs
+        if (folderName.Equals("Specials", StringComparison.OrdinalIgnoreCase) ||
+            folderName.Equals("OVA", StringComparison.OrdinalIgnoreCase) ||
+            folderName.Equals("OVAs", StringComparison.OrdinalIgnoreCase))
+        {
+            seasonNumber = 0; // 0 denotes Specials
+            return true;
+        }
+
+        // 2. Detect Season Patterns (e.g., "Season 1", "S02", "Book 3")
+        var patterns = new[]
+        {
+            @"^Season\s*(\d+)",
+            @"^S(\d+)$",
+            @"^Book\s*(\d+)",
+            @"^(\d+)(?:st|nd|rd|th)?\s*Season"
+        };
+
+        foreach (var pattern in patterns)
+        {
+            var match = Regex.Match(folderName, pattern, RegexOptions.IgnoreCase);
+            if (match.Success && int.TryParse(match.Groups[1].Value, out int num))
+            {
+                seasonNumber = num;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     // ── Fallback regex parsers ──────────────────────────────
 
     private static readonly Regex[] EpisodePatterns =

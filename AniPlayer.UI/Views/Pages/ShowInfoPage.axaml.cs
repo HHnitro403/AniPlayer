@@ -11,8 +11,10 @@ using Aniplayer.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 
 namespace AniPlayer.UI;
 
@@ -20,40 +22,58 @@ public partial class ShowInfoPage : UserControl
 {
     public event Action? BackRequested;
     public event Action<string>? EpisodePlayRequested;
-    public event Action<int>? MetadataRefreshRequested;
+    public event Action? MetadataRefreshRequested;
 
-    private int _seriesId;
-    private List<Episode> _allEpisodes = new();
+    private List<Series> _seriesList = new();
+
+    public class SeasonGroup
+    {
+        public string Header { get; set; } = string.Empty;
+        public List<Episode> Episodes { get; set; } = new();
+        public bool IsExpanded { get; set; } = true;
+    }
+
+    public ObservableCollection<SeasonGroup> SeasonGroups { get; } = new();
 
     public ShowInfoPage()
     {
         InitializeComponent();
-        EpisodeTypeFilter.SelectionChanged += (_, _) => ApplyEpisodeFilter();
+        SeasonListControl.ItemsSource = SeasonGroups;
     }
 
-    public void LoadSeriesData(Series series, IEnumerable<Episode> episodes)
+    private void OnEpisodePlayRequest(object? sender, RoutedEventArgs e)
     {
-        _seriesId = series.Id;
-        _allEpisodes = episodes.ToList();
+        if (sender is Control { DataContext: Episode episode })
+        {
+            EpisodePlayRequested?.Invoke(episode.FilePath);
+        }
+    }
 
-        Logger.Log($"[ShowInfoPage] LoadSeriesData: series ID={series.Id}, title='{series.DisplayTitle}', episodes={_allEpisodes.Count}", LogRegion.UI);
+    public void LoadSeriesData(List<Series> seriesGroup, List<Episode> allEpisodes)
+    {
+        _seriesList = seriesGroup; // Store the list for the refresh button
+        var sortedSeries = seriesGroup.OrderBy(s => s.SeasonNumber == 0 ? 999 : s.SeasonNumber).ToList();
+        var representative = sortedSeries.FirstOrDefault();
+        if (representative == null) return;
 
-        // Header info
-        TitleText.Text = series.DisplayTitle;
-        AlternateTitleText.Text = series.TitleRomaji != null && series.TitleRomaji != series.TitleEnglish
-            ? series.TitleRomaji : "";
-        AlternateTitleText.IsVisible = !string.IsNullOrEmpty(AlternateTitleText.Text);
+        Logger.Log($"[ShowInfoPage] LoadSeriesData: group='{representative.SeriesGroupName}', seasons={sortedSeries.Count}, episodes={allEpisodes.Count}", LogRegion.UI);
 
-        EpisodeCountText.Text = _allEpisodes.Count == 1 ? "1 episode" : $"{_allEpisodes.Count} episodes";
-        StatusBadge.Text = series.Status ?? "";
-        ScoreText.Text = series.AverageScore.HasValue ? $"Score: {series.AverageScore:0.#}" : "";
-        SynopsisText.Text = series.Synopsis ?? "";
-        SynopsisText.IsVisible = !string.IsNullOrEmpty(series.Synopsis);
+        // Header info (from representative series)
+        TitleText.Text = representative.SeriesGroupName;
+        AlternateTitleText.Text = ""; // This might need adjustment if alternate titles are per-season
+        AlternateTitleText.IsVisible = false;
+        RefreshMetadataButton.IsVisible = true;
+
+        EpisodeCountText.Text = allEpisodes.Count == 1 ? "1 episode" : $"{allEpisodes.Count} episodes";
+        StatusBadge.Text = representative.Status ?? "";
+        ScoreText.Text = representative.AverageScore.HasValue ? $"Score: {representative.AverageScore:0.#}" : "";
+        SynopsisText.Text = representative.Synopsis ?? "";
+        SynopsisText.IsVisible = !string.IsNullOrEmpty(representative.Synopsis);
 
         // Cover image
-        if (!string.IsNullOrEmpty(series.CoverImagePath) && File.Exists(series.CoverImagePath))
+        if (!string.IsNullOrEmpty(representative.CoverImagePath) && File.Exists(representative.CoverImagePath))
         {
-            CoverImage.Source = new Bitmap(series.CoverImagePath);
+            CoverImage.Source = new Bitmap(representative.CoverImagePath);
             CoverPlaceholder.IsVisible = false;
         }
         else
@@ -64,9 +84,9 @@ public partial class ShowInfoPage : UserControl
 
         // Genres
         GenresPanel.Children.Clear();
-        if (!string.IsNullOrEmpty(series.Genres))
+        if (!string.IsNullOrEmpty(representative.Genres))
         {
-            foreach (var genre in series.Genres.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+            foreach (var genre in representative.Genres.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
             {
                 GenresPanel.Children.Add(new Border
                 {
@@ -79,86 +99,25 @@ public partial class ShowInfoPage : UserControl
             }
         }
 
-        ApplyEpisodeFilter();
+        // Group episodes into seasons
+        SeasonGroups.Clear();
+        var episodesBySeason = allEpisodes.GroupBy(e => e.SeriesId).ToDictionary(g => g.Key, g => g.ToList());
+
+        foreach (var series in sortedSeries)
+        {
+            if (episodesBySeason.TryGetValue(series.Id, out var episodes))
+            {
+                var header = series.SeasonNumber == 0 ? "Specials / OVAs" : $"Season {series.SeasonNumber}";
+                SeasonGroups.Add(new SeasonGroup
+                {
+                    Header = header,
+                    Episodes = episodes.OrderBy(e => e.EpisodeNumber).ToList(),
+                    IsExpanded = true // All seasons expanded by default
+                });
+            }
+        }
     }
 
-    private void ApplyEpisodeFilter()
-    {
-        var selectedIndex = EpisodeTypeFilter.SelectedIndex;
-        var filtered = selectedIndex switch
-        {
-            1 => _allEpisodes.Where(e => e.EpisodeType == EpisodeTypes.Episode).ToList(),
-            2 => _allEpisodes.Where(e => e.EpisodeType == EpisodeTypes.Special).ToList(),
-            3 => _allEpisodes.Where(e => e.EpisodeType == EpisodeTypes.Ova).ToList(),
-            _ => _allEpisodes,
-        };
-
-        EpisodeListPanel.Children.Clear();
-
-        foreach (var ep in filtered)
-            EpisodeListPanel.Children.Add(CreateEpisodeRow(ep));
-
-        Logger.Log($"[ShowInfoPage] ApplyEpisodeFilter: filterIndex={selectedIndex}, showing {filtered.Count}/{_allEpisodes.Count} episodes", LogRegion.UI);
-    }
-
-    private Border CreateEpisodeRow(Episode ep)
-    {
-        var epLabel = new TextBlock
-        {
-            Text = ep.DisplayName,
-            FontWeight = FontWeight.SemiBold,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-
-        var titleLabel = new TextBlock
-        {
-            Text = ep.Title ?? "",
-            FontSize = 12,
-            Opacity = 0.5,
-            VerticalAlignment = VerticalAlignment.Center,
-            TextTrimming = TextTrimming.CharacterEllipsis,
-        };
-
-        var textStack = new StackPanel { Spacing = 2 };
-        textStack.Children.Add(epLabel);
-        if (!string.IsNullOrEmpty(ep.Title))
-            textStack.Children.Add(titleLabel);
-
-        var playBtn = new Button
-        {
-            Content = "Play",
-            VerticalAlignment = VerticalAlignment.Center,
-            Padding = new Thickness(12, 6),
-        };
-
-        var filePath = ep.FilePath;
-        playBtn.Click += (_, _) => EpisodePlayRequested?.Invoke(filePath);
-
-        var grid = new Grid
-        {
-            ColumnDefinitions = ColumnDefinitions.Parse("*,Auto"),
-        };
-        grid.Children.Add(textStack);
-        Grid.SetColumn(playBtn, 1);
-        grid.Children.Add(playBtn);
-
-        var row = new Border
-        {
-            Padding = new Thickness(12, 10),
-            CornerRadius = new CornerRadius(6),
-            Background = new SolidColorBrush(Color.FromArgb(20, 255, 255, 255)),
-            Cursor = new Cursor(StandardCursorType.Hand),
-            Child = grid,
-        };
-
-        row.PointerPressed += (_, e) =>
-        {
-            if (e.GetCurrentPoint(row).Properties.IsLeftButtonPressed)
-                EpisodePlayRequested?.Invoke(filePath);
-        };
-
-        return row;
-    }
 
     private void BackButton_Click(object? sender, RoutedEventArgs e)
     {
@@ -172,10 +131,32 @@ public partial class ShowInfoPage : UserControl
         try
         {
             var metadata = App.Services.GetService<IMetadataService>();
-            if (metadata != null)
+            var libraryService = App.Services.GetService<ILibraryService>(); // Get library service
+
+            if (metadata != null && libraryService != null && _seriesList.Any())
             {
-                await metadata.ApplyMetadataToSeriesAsync(_seriesId);
-                MetadataRefreshRequested?.Invoke(_seriesId);
+                // Refresh metadata for all series in this group
+                foreach (var series in _seriesList)
+                {
+                    await metadata.ApplyMetadataToSeriesAsync(series.Id);
+                }
+
+                // After updating metadata, refresh the page's own data from the DB
+                var seriesGroupName = _seriesList.First().SeriesGroupName;
+                var refreshedSeriesGroup = (await libraryService.GetSeriesByGroupNameAsync(seriesGroupName)).ToList();
+
+                var refreshedAllEpisodes = new List<Episode>();
+                foreach (var series in refreshedSeriesGroup.OrderBy(s => s.SeasonNumber))
+                {
+                    var episodes = (await libraryService.GetEpisodesBySeriesIdAsync(series.Id)).ToList();
+                    refreshedAllEpisodes.AddRange(episodes.OrderBy(e => e.EpisodeNumber));
+                }
+
+                // Now call LoadSeriesData with the refreshed data to update UI
+                LoadSeriesData(refreshedSeriesGroup, refreshedAllEpisodes);
+
+                // Notify the main window to refresh all pages (e.g. for library page title updates)
+                MetadataRefreshRequested?.Invoke();
             }
         }
         catch (Exception ex)
