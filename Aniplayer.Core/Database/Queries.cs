@@ -76,7 +76,7 @@ public static class Queries
                genres AS Genres, average_score AS AverageScore, total_episodes AS TotalEpisodes,
                status AS Status, metadata_fetched_at AS MetadataFetchedAt, created_at AS CreatedAt
         FROM Series
-        WHERE created_at >= datetime('now', @daysOffset)
+        WHERE created_at >= datetime('now', 'localtime', @daysOffset)
         ORDER BY created_at DESC";
 
     public const string InsertSeries = @"
@@ -100,7 +100,7 @@ public static class Queries
             average_score       = @AverageScore,
             total_episodes      = @TotalEpisodes,
             status              = @Status,
-            metadata_fetched_at = datetime('now')
+            metadata_fetched_at = datetime('now', 'localtime')
         WHERE id = @Id";
 
     public const string DeleteSeries =
@@ -168,30 +168,38 @@ public static class Queries
         WHERE e.series_id = @seriesId";
 
     public const string GetRecentlyWatched = @"
-        SELECT e.id AS Id, e.series_id AS SeriesId, e.file_path AS FilePath, e.title AS Title,
-               e.episode_number AS EpisodeNumber, e.episode_type AS EpisodeType,
-               e.duration_seconds AS DurationSeconds, e.thumbnail_path AS ThumbnailPath,
-               e.anilist_ep_id AS AnilistEpId, e.created_at AS CreatedAt,
-               wp.id AS WpId, wp.episode_id AS EpisodeId, wp.position_seconds AS PositionSeconds,
-               wp.duration_seconds AS DurationSeconds, wp.is_completed AS IsCompleted,
-               wp.last_watched_at AS LastWatchedAt
+        SELECT 
+            e.id AS Id, e.series_id AS SeriesId, e.file_path AS FilePath, e.title AS Title,
+            e.episode_number AS EpisodeNumber, e.episode_type AS EpisodeType,
+            e.duration_seconds AS DurationSeconds, e.thumbnail_path AS ThumbnailPath,
+            e.anilist_ep_id AS AnilistEpId, e.created_at AS CreatedAt,
+            wp.id AS Id, wp.episode_id AS EpisodeId, wp.position_seconds AS PositionSeconds,
+            wp.duration_seconds AS DurationSeconds, wp.is_completed AS IsCompleted,
+            wp.last_watched_at AS LastWatchedAt
         FROM WatchProgress wp
         INNER JOIN Episodes e ON e.id = wp.episode_id
-        WHERE wp.position_seconds > 0 AND wp.is_completed = 0
+        WHERE wp.id IN (
+            SELECT MAX(wp2.id)
+            FROM WatchProgress wp2
+            INNER JOIN Episodes e2 ON e2.id = wp2.episode_id
+            WHERE wp2.is_completed = 0 AND wp2.position_seconds > 0
+            GROUP BY e2.series_id
+        )
         ORDER BY wp.last_watched_at DESC
         LIMIT @limit";
 
     public const string UpsertWatchProgress = @"
-        INSERT INTO WatchProgress (episode_id, position_seconds, duration_seconds, last_watched_at)
-        VALUES (@episodeId, @positionSeconds, @durationSeconds, datetime('now'))
+        INSERT INTO WatchProgress (episode_id, position_seconds, duration_seconds, is_completed, last_watched_at)
+        VALUES (@episodeId, @positionSeconds, @durationSeconds, 0, datetime('now', 'localtime'))
         ON CONFLICT(episode_id) DO UPDATE SET
             position_seconds = excluded.position_seconds,
             duration_seconds = excluded.duration_seconds,
+            is_completed     = 0,
             last_watched_at  = excluded.last_watched_at";
 
     public const string MarkEpisodeCompleted = @"
         INSERT INTO WatchProgress (episode_id, is_completed, last_watched_at)
-        VALUES (@episodeId, 1, datetime('now'))
+        VALUES (@episodeId, 1, datetime('now', 'localtime'))
         ON CONFLICT(episode_id) DO UPDATE SET
             is_completed    = 1,
             last_watched_at = excluded.last_watched_at";

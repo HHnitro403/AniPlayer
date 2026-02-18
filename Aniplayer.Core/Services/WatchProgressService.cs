@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using Aniplayer.Core.Database;
 using Aniplayer.Core.Interfaces;
@@ -10,7 +11,7 @@ namespace Aniplayer.Core.Services;
 public class WatchProgressService : IWatchProgressService
 {
     private readonly IDatabaseService _db;
-    private long _lastSaveTimestamp = 0; // Use Stopwatch ticks
+    private readonly ConcurrentDictionary<int, long> _lastSaveTimes = new();
     private static readonly long SaveIntervalTicks = Stopwatch.Frequency * 5; // 5 seconds in ticks
     private readonly ILogger<WatchProgressService> _logger;
 
@@ -39,10 +40,8 @@ public class WatchProgressService : IWatchProgressService
         if (!forceSave)
         {
             var now = Stopwatch.GetTimestamp();
-            if (now - _lastSaveTimestamp < SaveIntervalTicks)
+            if (_lastSaveTimes.TryGetValue(episodeId, out var lastSave) && now - lastSave < SaveIntervalTicks)
             {
-                // Optionally log debounce, but can be noisy.
-                // _logger.LogTrace("Debounced progress save for episode {EpisodeId}", episodeId);
                 return;
             }
         }
@@ -56,23 +55,31 @@ public class WatchProgressService : IWatchProgressService
             positionSeconds,
             durationSeconds
         });
-        _lastSaveTimestamp = Stopwatch.GetTimestamp(); // Update timestamp only after successful save
+        _lastSaveTimes[episodeId] = Stopwatch.GetTimestamp();
+
+        // Also ensure the episode table has the duration if it was missing
+        await conn.ExecuteAsync(Queries.UpdateEpisodeDuration, new { id = episodeId, duration = durationSeconds });
     }
 
     public async Task MarkCompletedAsync(int episodeId)
     {
         using var conn = _db.CreateConnection();
         await conn.ExecuteAsync(Queries.MarkEpisodeCompleted, new { episodeId });
+        _lastSaveTimes.TryRemove(episodeId, out _);
     }
 
     public async Task<IEnumerable<(Episode Episode, WatchProgress Progress)>> GetRecentlyWatchedAsync(int limit)
     {
         using var conn = _db.CreateConnection();
+        
+        // Use splitOn: "Id" because both Episode and WatchProgress have an 'Id' column.
+        // Dapper will split the row at the SECOND 'Id' column found in the SELECT.
         var results = await conn.QueryAsync<Episode, WatchProgress, (Episode, WatchProgress)>(
             Queries.GetRecentlyWatched,
             (episode, progress) => (episode, progress),
             new { limit },
-            splitOn: "WpId");
+            splitOn: "Id");
+
         return results;
     }
 }

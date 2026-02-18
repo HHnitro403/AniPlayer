@@ -64,7 +64,7 @@ public partial class PlayerPage : UserControl
 
         ProgressSlider.AddHandler(PointerPressedEvent, OnSliderPointerPressed, RoutingStrategies.Tunnel);
         ProgressSlider.AddHandler(PointerReleasedEvent, OnSliderPointerReleased, RoutingStrategies.Tunnel);
-        
+
         RootGrid.PointerMoved += OnPlayerPointerMoved;
         ControlsBar.PointerEntered += (_, _) => _mouseOverControls = true;
         ControlsBar.PointerExited += (_, _) => { _mouseOverControls = false; ResetControlsHideTimer(); };
@@ -119,7 +119,7 @@ public partial class PlayerPage : UserControl
                 Dispatcher.UIThread.Post(InitializeMpv);
                 return;
             }
-            
+
             var settings = App.Services.GetService<ISettingsService>();
             if (settings != null)
                 _vsyncEnabled = await settings.GetBoolAsync("vsync", false);
@@ -189,10 +189,10 @@ public partial class PlayerPage : UserControl
 
         await CleanupCurrentFileAsync();
         _playlist = playlist;
-        
+
         await ChangeToEpisodeAsync(playlist[startIndex], isInitialLoad: true);
     }
-    
+
     public void PausePlayback()
     {
         if (_mpvHandle == IntPtr.Zero || !_mpvInitialized || _currentEpisode == null) return;
@@ -250,12 +250,12 @@ public partial class PlayerPage : UserControl
     private void SeekRelative(double seconds)
     {
         if (_mpvHandle == IntPtr.Zero || _seekInFlight) return;
-        
+
         var now = Environment.TickCount64;
         if (now - _lastSeekTicks < 250) return;
         _lastSeekTicks = now;
         _seekInFlight = true;
-        
+
         var handle = _mpvHandle;
         Task.Run(() =>
         {
@@ -292,7 +292,7 @@ public partial class PlayerPage : UserControl
     {
         if (_isTransitioning) return;
         _isTransitioning = true;
-        
+
         if (!isInitialLoad && _currentEpisode != null && _currentEpisode.Id != newEpisode.Id)
         {
             Logger.Log($"[State] Saving progress for old episode {_currentEpisode.Id} before changing.");
@@ -302,9 +302,9 @@ public partial class PlayerPage : UserControl
         Logger.Log($"[State] Changing to new episode {newEpisode.Id} ('{newEpisode.FilePath}')");
         _currentEpisode = newEpisode;
         _playlistIndex = _playlist.ToList().FindIndex(e => e.Id == newEpisode.Id);
-        
+
         await LoadFileIntoMpvAsync(newEpisode.FilePath);
-        
+
         _isTransitioning = false;
         NextButton.IsEnabled = _playlistIndex < _playlist.Count - 1;
     }
@@ -312,7 +312,7 @@ public partial class PlayerPage : UserControl
     private async Task LoadFileIntoMpvAsync(string filePath)
     {
         Logger.Log($"=== LoadFileIntoMpvAsync: {filePath} ===");
-        
+
         if (_mpvReady != null && !_mpvReady.Task.IsCompleted)
         {
             Logger.Log("Waiting for MPV/renderer initialization to complete...");
@@ -331,7 +331,7 @@ public partial class PlayerPage : UserControl
             await _lockStream.DisposeAsync();
             _lockStream = null;
         }
-        
+
         var cmd = new[]
         {
             Marshal.StringToHGlobalAnsi("loadfile"),
@@ -342,7 +342,7 @@ public partial class PlayerPage : UserControl
         foreach (var ptr in cmd) if (ptr != IntPtr.Zero) Marshal.FreeHGlobal(ptr);
 
         _lockStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 1, FileOptions.Asynchronous);
-        
+
         SetOption("pause", "no");
         VideoHostControl.Renderer?.Render();
 
@@ -379,13 +379,13 @@ public partial class PlayerPage : UserControl
     private async Task PlayNextInPlaylistAsync()
     {
         if (_isTransitioning || _playlistIndex >= _playlist.Count - 1) return;
-        
+
         var nextIndex = _playlistIndex + 1;
         Logger.Log($"Playing next: index {nextIndex}/{_playlist.Count - 1}");
-        
+
         await ChangeToEpisodeAsync(_playlist[nextIndex]);
     }
-    
+
     private async Task AnalyzeFileChapters()
     {
         if (_currentEpisode == null || _mpvHandle == IntPtr.Zero) return;
@@ -404,7 +404,7 @@ public partial class PlayerPage : UserControl
                 var time = chapter.TryGetProperty("time", out var ts) ? ts.GetDouble() : 0;
                 rawChapters.Add(new Chapters.ChapterInfo(title ?? "", time));
             }
-            
+
             var durationStr = GetMpvPropertyString("duration");
             if (double.TryParse(durationStr, out var duration) && duration > 0)
             {
@@ -428,7 +428,7 @@ public partial class PlayerPage : UserControl
 
             var trackListJson = GetMpvPropertyString("track-list");
             if (string.IsNullOrEmpty(trackListJson)) return;
-            
+
             var tracks = JsonDocument.Parse(trackListJson);
             var audioTracks = new List<(int id, string label, string? lang, string? title)>();
 
@@ -439,7 +439,7 @@ public partial class PlayerPage : UserControl
                     var id = track.GetProperty("id").GetInt32();
                     var lang = track.TryGetProperty("lang", out var l) ? l.GetString() : null;
                     var title = track.TryGetProperty("title", out var t) ? t.GetString() : null;
-                    var label = !string.IsNullOrEmpty(lang) && !string.IsNullOrEmpty(title) ? $"{lang} — {title}" 
+                    var label = !string.IsNullOrEmpty(lang) && !string.IsNullOrEmpty(title) ? $"{lang} — {title}"
                         : title ?? lang ?? $"Track {id}";
 
                     audioTracks.Add((id, label, lang, title));
@@ -457,7 +457,7 @@ public partial class PlayerPage : UserControl
                     SetOption("aid", $"{match.id}");
                 }
             }
-            
+
             var aidStr = GetMpvPropertyString("aid");
             if (!long.TryParse(aidStr, out var currentAid)) currentAid = 0;
 
@@ -465,7 +465,11 @@ public partial class PlayerPage : UserControl
             {
                 var btn = new Button
                 {
-                    Content = label, Tag = id, Padding = new Thickness(8, 4), Margin = new Thickness(0, 0, 4, 0), FontSize = 11
+                    Content = label,
+                    Tag = id,
+                    Padding = new Thickness(8, 4),
+                    Margin = new Thickness(0, 0, 4, 0),
+                    FontSize = 11
                 };
                 if (id == currentAid) btn.FontWeight = Avalonia.Media.FontWeight.Bold;
                 btn.Click += (_, _) => { if (btn.Tag is int tid) SwitchAudioTrack(tid); };
@@ -496,7 +500,7 @@ public partial class PlayerPage : UserControl
         }
         return default;
     }
-    
+
     private void SwitchAudioTrack(int trackId)
     {
         if (_mpvHandle == IntPtr.Zero || _currentEpisode == null || _libraryService == null) return;
@@ -509,7 +513,7 @@ public partial class PlayerPage : UserControl
                     ? Avalonia.Media.FontWeight.Bold
                     : Avalonia.Media.FontWeight.Normal;
         }
-        
+
         if (_audioTrackInfo.TryGetValue(trackId, out var info))
         {
             var lang = info.lang ?? "";
@@ -584,10 +588,10 @@ public partial class PlayerPage : UserControl
                     ResetControlsHideTimer(); // Only starts auto-hide timer in fullscreen
                 }
             }
-            
+
             var (eofReached, posStr, durStr) = await Task.Run(() => (
-                GetMpvPropertyString("eof-reached"), 
-                GetMpvPropertyString("time-pos"), 
+                GetMpvPropertyString("eof-reached"),
+                GetMpvPropertyString("time-pos"),
                 GetMpvPropertyString("duration")
             ));
 
@@ -600,7 +604,10 @@ public partial class PlayerPage : UserControl
                 return;
             }
 
-            if (!_isUserSeeking && double.TryParse(posStr, out var pos) && double.TryParse(durStr, out var dur) && dur > 0)
+            if (!_isUserSeeking &&
+             double.TryParse(posStr, NumberStyles.Any, CultureInfo.InvariantCulture, out var pos) &&
+             double.TryParse(durStr, NumberStyles.Any, CultureInfo.InvariantCulture, out var dur) &&
+             dur > 0)
             {
                 ProgressSlider.Maximum = dur;
                 ProgressSlider.Value = pos;
@@ -619,9 +626,9 @@ public partial class PlayerPage : UserControl
     private void UpdateSkipOverlay()
     {
         if (_currentEpisode == null) return;
-        
+
         var now = ProgressSlider.Value;
-        
+
         if (_currentEpisode.HasIntro && now >= _currentEpisode.IntroStart && now < _currentEpisode.IntroEnd)
         {
             if (!SkipOverlayButton.IsVisible)
@@ -631,7 +638,7 @@ public partial class PlayerPage : UserControl
                 SkipOverlayButton.IsVisible = true;
             }
         }
-        else if (_currentEpisode.HasOutro && now >= _currentEpisode.OutroStart && _playlistIndex < _playlist.Count -1)
+        else if (_currentEpisode.HasOutro && now >= _currentEpisode.OutroStart && _playlistIndex < _playlist.Count - 1)
         {
             if (!SkipOverlayButton.IsVisible || (string)SkipButtonText.Text != "Next Episode")
             {
@@ -645,7 +652,7 @@ public partial class PlayerPage : UserControl
             if (SkipOverlayButton.IsVisible) SkipOverlayButton.IsVisible = false;
         }
     }
-    
+
     private void OnSkipButtonClick(object? sender, RoutedEventArgs e)
     {
         if (sender is not Button btn || btn.Tag is not double target) return;
@@ -670,7 +677,9 @@ public partial class PlayerPage : UserControl
         {
             var posStr = GetMpvPropertyString("time-pos");
             var durStr = GetMpvPropertyString("duration");
-            if (double.TryParse(posStr, out var pos) && double.TryParse(durStr, out var dur) && dur > 0)
+            if (double.TryParse(posStr, NumberStyles.Any, CultureInfo.InvariantCulture, out var pos) &&
+            double.TryParse(durStr, NumberStyles.Any, CultureInfo.InvariantCulture, out var dur) &&
+            dur > 0)
             {
                 var posSec = (int)pos;
                 var durSec = (int)dur;
@@ -748,7 +757,7 @@ public partial class PlayerPage : UserControl
         var ts = TimeSpan.FromSeconds(Math.Max(seconds, 0));
         return ts.Hours > 0 ? ts.ToString(@"h\:mm\:ss") : ts.ToString(@"m\:ss");
     }
-    
+
     public void SetFullscreen(bool fullscreen)
     {
         _isFullscreen = fullscreen;
@@ -808,7 +817,7 @@ public partial class PlayerPage : UserControl
         _controlsHideTimer = null;
         ShowControls();
     }
-    
+
     private async Task CleanupCurrentFileAsync()
     {
         await SaveCurrentProgressAsync(force: true);
@@ -836,7 +845,7 @@ public partial class PlayerPage : UserControl
         TimeCurrentText.Text = "0:00";
         TimeTotalText.Text = "0:00";
     }
-    
+
     private void PollMpvEvents()
     {
         try
@@ -849,7 +858,7 @@ public partial class PlayerPage : UserControl
         }
         catch (Exception ex) { Logger.LogError("PollMpvEvents", ex); }
     }
-    
+
     public async Task ShutdownAsync()
     {
         await CleanupCurrentFileAsync();
