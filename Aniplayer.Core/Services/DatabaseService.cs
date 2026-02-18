@@ -13,12 +13,12 @@ public class DatabaseService : IDatabaseService
     private readonly DatabaseInitializer _initializer;
     private readonly ILogger<DatabaseService> _logger;
 
-    public DatabaseService(ILogger<DatabaseService> logger)
+    public DatabaseService(ILogger<DatabaseService> logger, ILoggerFactory loggerFactory)
     {
         _logger = logger;
         _connectionString = $"Data Source={AppConstants.DbPath}";
         _initializer = new DatabaseInitializer(
-            new LoggerFactory().CreateLogger<DatabaseInitializer>());
+            loggerFactory.CreateLogger<DatabaseInitializer>());
     }
 
     public IDbConnection CreateConnection()

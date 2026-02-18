@@ -1,19 +1,23 @@
+using System.Diagnostics;
 using Aniplayer.Core.Database;
 using Aniplayer.Core.Interfaces;
 using Aniplayer.Core.Models;
 using Dapper;
+using Microsoft.Extensions.Logging;
 
 namespace Aniplayer.Core.Services;
 
 public class WatchProgressService : IWatchProgressService
 {
     private readonly IDatabaseService _db;
-    private DateTime _lastSaveTime = DateTime.MinValue;
-    private static readonly TimeSpan SaveInterval = TimeSpan.FromSeconds(5);
+    private long _lastSaveTimestamp = 0; // Use Stopwatch ticks
+    private static readonly long SaveIntervalTicks = Stopwatch.Frequency * 5; // 5 seconds in ticks
+    private readonly ILogger<WatchProgressService> _logger;
 
-    public WatchProgressService(IDatabaseService db)
+    public WatchProgressService(IDatabaseService db, ILogger<WatchProgressService> logger)
     {
         _db = db;
+        _logger = logger;
     }
 
     public async Task<WatchProgress?> GetProgressByEpisodeIdAsync(int episodeId)
@@ -32,11 +36,19 @@ public class WatchProgressService : IWatchProgressService
 
     public async Task UpdateProgressAsync(int episodeId, int positionSeconds, int durationSeconds, bool forceSave = false)
     {
-        if (!forceSave && DateTime.UtcNow - _lastSaveTime < SaveInterval)
+        if (!forceSave)
         {
-            return;
+            var now = Stopwatch.GetTimestamp();
+            if (now - _lastSaveTimestamp < SaveIntervalTicks)
+            {
+                // Optionally log debounce, but can be noisy.
+                // _logger.LogTrace("Debounced progress save for episode {EpisodeId}", episodeId);
+                return;
+            }
         }
 
+        _logger.LogDebug("Saving progress for episode {EpisodeId} at {Position}s", episodeId, positionSeconds);
+        
         using var conn = _db.CreateConnection();
         await conn.ExecuteAsync(Queries.UpsertWatchProgress, new
         {
@@ -44,7 +56,7 @@ public class WatchProgressService : IWatchProgressService
             positionSeconds,
             durationSeconds
         });
-        _lastSaveTime = DateTime.UtcNow;
+        _lastSaveTimestamp = Stopwatch.GetTimestamp(); // Update timestamp only after successful save
     }
 
     public async Task MarkCompletedAsync(int episodeId)

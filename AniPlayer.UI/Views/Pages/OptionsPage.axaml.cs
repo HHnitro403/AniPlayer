@@ -8,6 +8,7 @@ using Aniplayer.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Collections.Generic;
+using Aniplayer.Core.Constants;
 
 namespace AniPlayer.UI;
 
@@ -17,18 +18,93 @@ public partial class OptionsPage : UserControl
     public event Action<int>? LibraryRemoveRequested;
 
     private readonly ISettingsService _settings;
+    private bool _isProgrammaticChange; // Prevent event feedback loops
 
     public OptionsPage()
     {
         InitializeComponent();
         _settings = App.Services.GetRequiredService<ISettingsService>();
         _ = LoadSettingsAsync();
+        
         VsyncToggle.IsCheckedChanged += OnVsyncToggleChanged;
+        MasterLogToggle.IsCheckedChanged += OnMasterLogToggleChanged;
+        ScannerLogToggle.IsCheckedChanged += OnLogRegionToggleChanged;
+        ParserLogToggle.IsCheckedChanged += OnLogRegionToggleChanged;
+        UiLogToggle.IsCheckedChanged += OnLogRegionToggleChanged;
+        DbLogToggle.IsCheckedChanged += OnLogRegionToggleChanged;
+        ProgressLogToggle.IsCheckedChanged += OnLogRegionToggleChanged;
     }
 
     private async System.Threading.Tasks.Task LoadSettingsAsync()
     {
+        _isProgrammaticChange = true;
+        
         VsyncToggle.IsChecked = await _settings.GetBoolAsync("vsync", false);
+
+        var masterEnabled = await _settings.GetBoolAsync("logging_master_enabled", false);
+        MasterLogToggle.IsChecked = masterEnabled;
+
+        // Set region toggles based on saved settings, defaulting UI/DB to true if master is on
+        ScannerLogToggle.IsChecked = await _settings.GetBoolAsync("logging_region_scanner", false);
+        ParserLogToggle.IsChecked = await _settings.GetBoolAsync("logging_region_parser", false);
+        UiLogToggle.IsChecked = await _settings.GetBoolAsync("logging_region_ui", masterEnabled);
+        DbLogToggle.IsChecked = await _settings.GetBoolAsync("logging_region_db", masterEnabled);
+        ProgressLogToggle.IsChecked = await _settings.GetBoolAsync("logging_region_progress", false);
+
+        _isProgrammaticChange = false;
+    }
+    
+    private async void OnMasterLogToggleChanged(object? sender, RoutedEventArgs e)
+    {
+        if (_isProgrammaticChange) return;
+
+        var isEnabled = MasterLogToggle.IsChecked == true;
+        Logger.MasterLoggingEnabled = isEnabled;
+        await _settings.SetAsync("logging_master_enabled", isEnabled ? "1" : "0");
+
+        // If the master toggle was just turned on, we might need to set the default states for UI/DB
+        if (isEnabled)
+        {
+            _isProgrammaticChange = true;
+            // Check if a value has been explicitly saved before. If not, apply default.
+            if (await _settings.GetAsync("logging_region_ui") == null)
+            {
+                UiLogToggle.IsChecked = true;
+            }
+            if (await _settings.GetAsync("logging_region_db") == null)
+            {
+                DbLogToggle.IsChecked = true;
+            }
+            _isProgrammaticChange = false;
+        }
+    }
+
+    private async void OnLogRegionToggleChanged(object? sender, RoutedEventArgs e)
+    {
+        if (_isProgrammaticChange || sender is not ToggleSwitch ts) return;
+
+        var (region, key) = ts.Name switch
+        {
+            "ScannerLogToggle" => (LogRegion.Scanner, "logging_region_scanner"),
+            "ParserLogToggle" => (LogRegion.Parser, "logging_region_parser"),
+            "UiLogToggle" => (LogRegion.UI, "logging_region_ui"),
+            "DbLogToggle" => (LogRegion.DB, "logging_region_db"),
+            "ProgressLogToggle" => (LogRegion.Progress, "logging_region_progress"),
+            _ => (LogRegion.None, string.Empty)
+        };
+        
+        if (region == LogRegion.None) return;
+
+        var isChecked = ts.IsChecked == true;
+        if (isChecked)
+        {
+            Logger.EnableRegion(region);
+        }
+        else
+        {
+            Logger.DisableRegion(region);
+        }
+        await _settings.SetAsync(key, isChecked ? "1" : "0");
     }
 
     private void OnVsyncToggleChanged(object? sender, RoutedEventArgs e)

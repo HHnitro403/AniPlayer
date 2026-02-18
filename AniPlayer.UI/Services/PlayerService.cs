@@ -6,11 +6,13 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Threading; // [Changed] Replaces System.Timers
 using Aniplayer.Core.Helpers;
 using Aniplayer.Core.Interfaces;
 using Aniplayer.Core.Models;
+using Aniplayer.Core.Constants;
 
 namespace AniPlayer.UI.Services;
 
@@ -24,6 +26,8 @@ public class PlayerService : Aniplayer.Core.Interfaces.IPlayerService, IDisposab
 
     // [Changed] Use DispatcherTimer for UI-safe updates
     private DispatcherTimer? _positionTimer;
+    private readonly SemaphoreSlim _tickSemaphore = new(1, 1);
+
 
     private IReadOnlyList<Episode> _playlist = Array.Empty<Episode>();
     private int _playlistIndex = -1;
@@ -48,6 +52,7 @@ public class PlayerService : Aniplayer.Core.Interfaces.IPlayerService, IDisposab
     {
         _libraryService = libraryService;
         _watchProgressService = watchProgressService;
+        StateChanged += OnPlayerStateChanged; // Subscribe to its own state changes
     }
 
     public Task InitializeAsync(VideoHost videoHost)
@@ -77,7 +82,7 @@ public class PlayerService : Aniplayer.Core.Interfaces.IPlayerService, IDisposab
         _mpvInitialized = true;
         Logger.Log("[PlayerService] MPV Initialized successfully.");
 
-        StartPositionTimer();
+        StartPositionTimer(); // Create timer, but its actual start/stop is managed by OnPlayerStateChanged
         return Task.CompletedTask;
     }
 
@@ -104,12 +109,14 @@ public class PlayerService : Aniplayer.Core.Interfaces.IPlayerService, IDisposab
     {
         if (CurrentEpisode == null) return;
         SetOption("pause", "no");
+        // Timer start/stop is now managed by OnPlayerStateChanged
     }
 
     public void Pause()
     {
         if (CurrentEpisode == null) return;
         SetOption("pause", "yes");
+        // Timer start/stop is now managed by OnPlayerStateChanged
     }
 
     public async void PlayNext()
@@ -212,19 +219,33 @@ public class PlayerService : Aniplayer.Core.Interfaces.IPlayerService, IDisposab
     }
 
     // [Changed] Signature matches DispatcherTimer.Tick (EventHandler)
-    private void OnPositionTimerTick(object? sender, EventArgs e)
+    private async void OnPositionTimerTick(object? sender, EventArgs e)
     {
         if (CurrentEpisode == null) return;
 
-        UpdatePlayerState();
-
-        if (GetMpvPropertyString("eof-reached") == "yes")
+        // Prevent re-entrancy if the DB call takes longer than the timer interval
+        if (!await _tickSemaphore.WaitAsync(0))
         {
-            PlayNext();
+            Logger.Log("[PlayerService] Skipping progress tick, previous operation still in progress.", LogRegion.Progress);
             return;
         }
 
-        _ = SaveCurrentProgressAsync();
+        try
+        {
+            UpdatePlayerState();
+
+            if (GetMpvPropertyString("eof-reached") == "yes")
+            {
+                PlayNext();
+                return;
+            }
+
+            await SaveCurrentProgressAsync();
+        }
+        finally
+        {
+            _tickSemaphore.Release();
+        }
     }
 
     private void UpdatePlayerState()
@@ -238,19 +259,44 @@ public class PlayerService : Aniplayer.Core.Interfaces.IPlayerService, IDisposab
         if (Duration > 0) PositionChanged?.Invoke();
     }
 
+    private void OnPlayerStateChanged()
+    {
+        if (IsPlaying)
+        {
+            _positionTimer?.Start();
+        }
+        else
+        {
+            _positionTimer?.Stop();
+        }
+    }
+
     private async Task SaveCurrentProgressAsync(bool force = false, bool markCompleted = false)
     {
         if (CurrentEpisode == null || Duration <= 0) return;
 
-        bool shouldMarkCompleted = markCompleted || Position >= Duration * 0.95 || (Duration > 30 && Duration - Position < 30);
+        Logger.Log($"[PlayerService] Save attempt for ep {CurrentEpisode.Id} (Force: {force}, MarkCompleted: {markCompleted})", LogRegion.Progress);
 
-        if (shouldMarkCompleted)
+        try
         {
-            await _watchProgressService.MarkCompletedAsync(CurrentEpisode.Id);
+            bool shouldMarkCompleted = markCompleted || Position >= Duration * 0.95 || (Duration > 30 && Duration - Position < 30);
+
+            if (shouldMarkCompleted)
+            {
+                await _watchProgressService.MarkCompletedAsync(CurrentEpisode.Id);
+                Logger.Log($"[PlayerService] Marked ep {CurrentEpisode.Id} as completed.", LogRegion.Progress);
+            }
+            else
+            {
+                await _watchProgressService.UpdateProgressAsync(CurrentEpisode.Id, (int)Position, (int)Duration, force);
+                // The actual save log is in WatchProgressService to avoid duplication when debounced
+            }
         }
-        else
+        catch (Exception ex)
         {
-            await _watchProgressService.UpdateProgressAsync(CurrentEpisode.Id, (int)Position, (int)Duration, force);
+            Logger.LogError($"[PlayerService] Failed to save progress for episode {CurrentEpisode.Id}", ex);
+            // Optional: Show a non-intrusive toast notification to user
+            // "Progress save failed - will retry on next update"
         }
     }
 
@@ -264,7 +310,8 @@ public class PlayerService : Aniplayer.Core.Interfaces.IPlayerService, IDisposab
             Interval = TimeSpan.FromMilliseconds(500)
         };
         _positionTimer.Tick += OnPositionTimerTick;
-        _positionTimer.Start();
+        // The timer's start/stop is now managed by OnPlayerStateChanged based on player state.
+        // It's not started here directly anymore, but just created.
     }
 
     private async Task AnalyzeFileChapters()
@@ -339,7 +386,7 @@ public class PlayerService : Aniplayer.Core.Interfaces.IPlayerService, IDisposab
             SetCommand("stop");
             CurrentEpisode = null;
             IsPlaying = false;
-            StateChanged?.Invoke();
+            StateChanged?.Invoke(); // Important: Notify state change so timer stops if not already
         }
     }
 
@@ -398,6 +445,12 @@ public class PlayerService : Aniplayer.Core.Interfaces.IPlayerService, IDisposab
         {
             return value;
         }
+        
+        if (!string.IsNullOrEmpty(valueStr))
+        {
+            Logger.Log($"WARNING:[PlayerService] Could not parse mpv property '{name}'. Value was: '{valueStr}'.");
+        }
+
         return 0;
     }
 }
