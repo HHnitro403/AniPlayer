@@ -579,13 +579,23 @@ public partial class PlayerPage : UserControl
 
             // Detect mouse movement via OS cursor position polling.
             // This is necessary because NativeControlHost's HWND swallows Avalonia pointer events.
-            if (OperatingSystem.IsWindows() && GetCursorPos(out var cursorPos))
+            if (OperatingSystem.IsWindows() && _isFullscreen)
             {
-                if (cursorPos.X != _lastCursorX || cursorPos.Y != _lastCursorY)
+                if (GetCursorPos(out var cursorPos))
                 {
-                    _lastCursorX = cursorPos.X; _lastCursorY = cursorPos.Y;
-                    ShowControls();
-                    ResetControlsHideTimer(); // Only starts auto-hide timer in fullscreen
+                    // Initialize on first run
+                    if (_lastCursorX == 0 && _lastCursorY == 0)
+                    {
+                        _lastCursorX = cursorPos.X;
+                        _lastCursorY = cursorPos.Y;
+                    }
+                    else if (cursorPos.X != _lastCursorX || cursorPos.Y != _lastCursorY)
+                    {
+                        _lastCursorX = cursorPos.X;
+                        _lastCursorY = cursorPos.Y;
+                        ShowControls();
+                        ResetControlsHideTimer();
+                    }
                 }
             }
 
@@ -767,6 +777,15 @@ public partial class PlayerPage : UserControl
             Grid.SetRow(ControlsBar, 0);
             Grid.SetRowSpan(ControlsBar, 2);
             ControlsBar.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Bottom;
+
+            // Initialize cursor tracking when entering fullscreen
+            if (OperatingSystem.IsWindows() && GetCursorPos(out var pos))
+            {
+                _lastCursorX = pos.X;
+                _lastCursorY = pos.Y;
+            }
+
+            ShowControls(); // Show controls immediately when entering fullscreen
             ResetControlsHideTimer();
         }
         else
