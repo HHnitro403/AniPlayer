@@ -7,6 +7,7 @@ using Aniplayer.Core.Interfaces;
 using Aniplayer.Core.Services;
 using System;
 using Aniplayer.Core.Constants;
+using AniPlayer.UI.Services;
 
 namespace AniPlayer.UI
 {
@@ -34,7 +35,7 @@ namespace AniPlayer.UI
             services.AddSingleton<IScannerService, ScannerService>();
             services.AddSingleton<IMetadataService, MetadataService>();
             services.AddSingleton<IFolderWatcherService, FolderWatcherService>();
-            services.AddSingleton<IPlayerService, PlayerService>();
+            
 
             Services = services.BuildServiceProvider();
 

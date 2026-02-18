@@ -16,7 +16,7 @@ using Aniplayer.Core.Constants;
 
 namespace AniPlayer.UI.Services;
 
-public class PlayerService : Aniplayer.Core.Interfaces.IPlayerService, IDisposable
+public class PlayerService :  IDisposable
 {
     private readonly ILibraryService _libraryService;
     private readonly IWatchProgressService _watchProgressService;
