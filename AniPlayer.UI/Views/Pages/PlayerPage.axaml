@@ -6,10 +6,12 @@
              mc:Ignorable="d" d:DesignWidth="960" d:DesignHeight="600"
              x:Class="AniPlayer.UI.PlayerPage">
 
-    <Grid x:Name="RootGrid">
+    <!-- Row 0: Video fills remaining space. Row 1: Controls in their own row,
+         never covered by the native HWND from NativeControlHost. -->
+    <Grid x:Name="RootGrid" RowDefinitions="*,Auto">
 
-        <!-- Video area -->
-        <Grid x:Name="VideoContainer" Background="Black" PointerMoved="OnPlayerPointerMoved">
+        <!-- Video area (Row 0) — native window lives here -->
+        <Grid x:Name="VideoContainer" Grid.Row="0" Background="Black">
             <local:VideoHost x:Name="VideoHostControl"/>
             <TextBlock x:Name="PlaceholderText"
                        Text="Open a video file to start playback"
@@ -22,7 +24,7 @@
             <Button x:Name="SkipOverlayButton"
                     HorizontalAlignment="Right"
                     VerticalAlignment="Bottom"
-                    Margin="0,0,30,120"
+                    Margin="0,0,30,20"
                     Padding="15,10"
                     Background="#CC000000"
                     Foreground="White"
@@ -42,9 +44,9 @@
             </Button>
         </Grid>
 
-        <!-- Controls bar below the video -->
+        <!-- Controls bar (Row 1) — separate from native window, always accessible -->
         <Border x:Name="ControlsBar"
-                VerticalAlignment="Bottom"
+                Grid.Row="1"
                 Background="#1A1A2E"
                 Padding="16,10">
             <StackPanel Spacing="8">

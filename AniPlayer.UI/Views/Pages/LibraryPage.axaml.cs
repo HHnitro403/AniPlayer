@@ -118,7 +118,7 @@ public partial class LibraryPage : UserControl
                 Background = new SolidColorBrush(Color.FromArgb(40, 255, 255, 255)),
                 Child = new TextBlock
                 {
-                    Text = seriesGroupName.Length > 0 ? seriesGroupName[0].ToString() : "?",
+                    Text = representative.DisplayTitle.Length > 0 ? representative.DisplayTitle[0].ToString() : "?",
                     FontSize = 36,
                     Opacity = 0.3,
                     HorizontalAlignment = HorizontalAlignment.Center,
@@ -131,7 +131,15 @@ public partial class LibraryPage : UserControl
         // ... (Rest of your Badge and Title logic remains the same) ...
         if (seasonCount > 1) { /* ... */ }
         stack.Children.Add(coverPanel);
-        stack.Children.Add(new TextBlock { Text = seriesGroupName /*...*/ });
+        stack.Children.Add(new TextBlock
+        {
+            Text = representative.DisplayTitle,
+            FontWeight = FontWeight.SemiBold,
+            FontSize = 13,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            TextWrapping = TextWrapping.Wrap,
+            MaxHeight = 36,
+        });
 
         var card = new Border
         {

@@ -18,7 +18,7 @@ public class MetadataService : IMetadataService
 
     private const string SearchQuery = @"
         query ($search: String) {
-          Media(search: $search, type: ANIME) {
+          Media(search: $search, type: ANIME, isAdult: false, format_in: [TV, TV_SHORT, OVA, ONA, MOVIE, SPECIAL]) {
             id
             title { romaji english native }
             coverImage { large }
@@ -191,9 +191,19 @@ public class MetadataService : IMetadataService
 
     private static string CleanTitleForSearch(string title)
     {
+        // Strip leading [Group] tags (e.g. "[SubGroup] Title")
+        var cleaned = Regex.Replace(title, @"^\[.*?\]\s*", "");
+
         // Strip common suffixes that break AniList matching
-        var cleaned = Regex.Replace(title, @"\s+(?:Season|Part|Cour|S)\s*\d+$", "", RegexOptions.IgnoreCase);
+        cleaned = Regex.Replace(cleaned, @"\s+(?:Season|Part|Cour|S)\s*\d+$", "", RegexOptions.IgnoreCase);
         cleaned = Regex.Replace(cleaned, @"\s+\(.*?\)\s*$", ""); // "(Dub)", "(2024)"
+
+        // Strip trailing quality/resolution tags (e.g. "1080p", "BD", "BluRay")
+        cleaned = Regex.Replace(cleaned, @"\s+(?:\d{3,4}p|BD|BluRay|BDRip|WEB-?DL|WEBRip)\s*$", "", RegexOptions.IgnoreCase);
+
+        // Strip trailing separator + number patterns (e.g. "- 01", "- S01E01")
+        cleaned = Regex.Replace(cleaned, @"\s*[-–—]\s*(?:S\d+E\d+|\d+)\s*$", "", RegexOptions.IgnoreCase);
+
         return cleaned.Trim();
     }
 

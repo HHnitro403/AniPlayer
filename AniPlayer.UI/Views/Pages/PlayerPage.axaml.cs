@@ -65,7 +65,7 @@ public partial class PlayerPage : UserControl
         ProgressSlider.AddHandler(PointerPressedEvent, OnSliderPointerPressed, RoutingStrategies.Tunnel);
         ProgressSlider.AddHandler(PointerReleasedEvent, OnSliderPointerReleased, RoutingStrategies.Tunnel);
         
-        VideoContainer.PointerMoved += OnPlayerPointerMoved;
+        RootGrid.PointerMoved += OnPlayerPointerMoved;
         ControlsBar.PointerEntered += (_, _) => _mouseOverControls = true;
         ControlsBar.PointerExited += (_, _) => { _mouseOverControls = false; ResetControlsHideTimer(); };
     }
@@ -239,6 +239,10 @@ public partial class PlayerPage : UserControl
             case Key.Right: SeekRelative(5); return true;
             case Key.Up: AdjustVolume(10); return true;
             case Key.Down: AdjustVolume(-5); return true;
+            case Key.A: CycleAudioTrack(); return true;
+            case Key.F: FullscreenToggleRequested?.Invoke(); return true;
+            case Key.N: NextButton_Click(null, null!); return true;
+            case Key.M: ToggleMute(); return true;
             default: return false;
         }
     }
@@ -513,6 +517,38 @@ public partial class PlayerPage : UserControl
         }
     }
 
+    private void CycleAudioTrack()
+    {
+        if (_mpvHandle == IntPtr.Zero || _audioTrackInfo.Count == 0) return;
+
+        var aidStr = GetMpvPropertyString("aid");
+        if (!int.TryParse(aidStr, out var currentAid)) currentAid = 0;
+
+        var trackIds = _audioTrackInfo.Keys.OrderBy(k => k).ToList();
+        if (trackIds.Count == 0) return;
+
+        var currentIndex = trackIds.IndexOf(currentAid);
+        var nextIndex = (currentIndex + 1) % trackIds.Count;
+        SwitchAudioTrack(trackIds[nextIndex]);
+
+        // Show brief status of the selected track
+        if (_audioTrackInfo.TryGetValue(trackIds[nextIndex], out var info))
+        {
+            var label = !string.IsNullOrEmpty(info.lang) && !string.IsNullOrEmpty(info.title)
+                ? $"{info.lang} — {info.title}"
+                : info.title ?? info.lang ?? $"Track {trackIds[nextIndex]}";
+            StatusText.Text = $"Audio: {label}";
+        }
+    }
+
+    private void ToggleMute()
+    {
+        if (_mpvHandle == IntPtr.Zero) return;
+        var muted = GetMpvPropertyString("mute") == "yes";
+        SetOption("mute", muted ? "no" : "yes");
+        StatusText.Text = muted ? "Unmuted" : "Muted";
+    }
+
     private void StartPositionTimer()
     {
         _positionTimer?.Stop();
@@ -537,13 +573,15 @@ public partial class PlayerPage : UserControl
             PollMpvEvents();
             UpdateSkipOverlay(); // Check for intro/outro
 
-            if (_isFullscreen && GetCursorPos(out var cursorPos))
+            // Detect mouse movement via OS cursor position polling.
+            // This is necessary because NativeControlHost's HWND swallows Avalonia pointer events.
+            if (OperatingSystem.IsWindows() && GetCursorPos(out var cursorPos))
             {
                 if (cursorPos.X != _lastCursorX || cursorPos.Y != _lastCursorY)
                 {
                     _lastCursorX = cursorPos.X; _lastCursorY = cursorPos.Y;
                     ShowControls();
-                    ResetControlsHideTimer();
+                    ResetControlsHideTimer(); // Only starts auto-hide timer in fullscreen
                 }
             }
             
@@ -714,8 +752,22 @@ public partial class PlayerPage : UserControl
     public void SetFullscreen(bool fullscreen)
     {
         _isFullscreen = fullscreen;
-        if (fullscreen) ResetControlsHideTimer();
-        else StopControlsHideTimer();
+        if (fullscreen)
+        {
+            // In fullscreen: controls overlay the video (span both rows)
+            Grid.SetRow(ControlsBar, 0);
+            Grid.SetRowSpan(ControlsBar, 2);
+            ControlsBar.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Bottom;
+            ResetControlsHideTimer();
+        }
+        else
+        {
+            // In windowed: controls in their own row (Row 1), always visible
+            Grid.SetRow(ControlsBar, 1);
+            Grid.SetRowSpan(ControlsBar, 1);
+            ControlsBar.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Stretch;
+            StopControlsHideTimer();
+        }
     }
 
     private void OnPlayerPointerMoved(object? sender, PointerEventArgs e)
@@ -735,19 +787,17 @@ public partial class PlayerPage : UserControl
 
     private void HideControls()
     {
-        if (_mouseOverControls || _currentEpisode == null) return;
+        if (!_isFullscreen || _mouseOverControls || _currentEpisode == null) return;
         ControlsBar.IsVisible = false;
-        if (_isFullscreen)
-        {
-            Cursor = new Cursor(StandardCursorType.None);
-        }
+        Cursor = new Cursor(StandardCursorType.None);
     }
 
     private void ResetControlsHideTimer()
     {
         _controlsHideTimer?.Stop();
-        if (_currentEpisode == null) return; // Don't start timer if no video is loaded
-        _controlsHideTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
+        // Only auto-hide controls in fullscreen mode; in windowed mode they stay visible
+        if (_currentEpisode == null || !_isFullscreen) return;
+        _controlsHideTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
         _controlsHideTimer.Tick += (_, _) => { _controlsHideTimer?.Stop(); HideControls(); };
         _controlsHideTimer.Start();
     }

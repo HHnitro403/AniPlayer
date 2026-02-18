@@ -249,8 +249,11 @@ namespace AniPlayer.UI
             {
                 var libraries = (await _libraryService.GetAllLibrariesAsync()).ToList();
                 var allSeries = (await _libraryService.GetAllSeriesAsync()).ToList();
+                // Group recently added series by SeriesGroupName so each anime appears once
                 var recentSeries = allSeries
                     .Where(s => s.CreatedAt != null && DateTime.Parse(s.CreatedAt) >= DateTime.Now.AddDays(-14))
+                    .GroupBy(s => s.SeriesGroupName, StringComparer.OrdinalIgnoreCase)
+                    .Select(g => g.OrderByDescending(s => s.CoverImagePath != null).First())
                     .ToList();
                 
                 var recentlyWatched = (await _watchProgressService.GetRecentlyWatchedAsync(10)).ToList();
