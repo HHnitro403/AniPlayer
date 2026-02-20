@@ -31,8 +31,10 @@ public partial class PlayerPage : UserControl
     private DispatcherTimer? _controlsHideTimer;
     private bool _mouseOverControls;
     private bool _isFullscreen;
+    private bool _cursorInitialized;
     private int _lastCursorX, _lastCursorY;
     private Dictionary<int, (string? lang, string? title)> _audioTrackInfo = new();
+    private Dictionary<int, (string? lang, string? title)> _subtitleTrackInfo = new();
     private bool _vsyncEnabled;
 
     // State management
@@ -66,8 +68,6 @@ public partial class PlayerPage : UserControl
         ProgressSlider.AddHandler(PointerReleasedEvent, OnSliderPointerReleased, RoutingStrategies.Tunnel);
 
         RootGrid.PointerMoved += OnPlayerPointerMoved;
-        ControlsBar.PointerEntered += (_, _) => _mouseOverControls = true;
-        ControlsBar.PointerExited += (_, _) => { _mouseOverControls = false; ResetControlsHideTimer(); };
     }
 
     private async void OnAttachedToVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
@@ -197,7 +197,7 @@ public partial class PlayerPage : UserControl
     {
         if (_mpvHandle == IntPtr.Zero || !_mpvInitialized || _currentEpisode == null) return;
         SetOption("pause", "yes");
-        PlayPauseButton.Content = "Play";
+        PlayPauseButton.Content = "▶ Play";
         StatusText.Text = "Paused";
     }
 
@@ -208,7 +208,7 @@ public partial class PlayerPage : UserControl
         var paused = GetMpvPropertyString("pause") == "yes";
         SetOption("pause", paused ? "no" : "yes");
 
-        PlayPauseButton.Content = paused ? "Pause" : "Play";
+        PlayPauseButton.Content = paused ? "⏸ Pause" : "▶ Play";
         StatusText.Text = paused ? "Playing" : "Paused";
     }
 
@@ -240,6 +240,7 @@ public partial class PlayerPage : UserControl
             case Key.Up: AdjustVolume(10); return true;
             case Key.Down: AdjustVolume(-5); return true;
             case Key.A: CycleAudioTrack(); return true;
+            case Key.S: CycleSubtitleTrack(); return true;
             case Key.F: FullscreenToggleRequested?.Invoke(); return true;
             case Key.N: NextButton_Click(null, null!); return true;
             case Key.M: ToggleMute(); return true;
@@ -349,7 +350,7 @@ public partial class PlayerPage : UserControl
         PlaceholderText.IsVisible = false;
         NowPlayingText.Text = Path.GetFileName(filePath);
         StatusText.Text = "Playing";
-        PlayPauseButton.Content = "Pause";
+        PlayPauseButton.Content = "⏸ Pause";
 
         StartPositionTimer();
 
@@ -373,6 +374,7 @@ public partial class PlayerPage : UserControl
         await Task.Delay(1000);
         await AnalyzeFileChapters();
         await UpdateAudioTracksAsync();
+        await UpdateSubtitleTracksAsync();
         Logger.Log("=== LoadFileIntoMpvAsync END ===");
     }
 
@@ -469,7 +471,11 @@ public partial class PlayerPage : UserControl
                     Tag = id,
                     Padding = new Thickness(8, 4),
                     Margin = new Thickness(0, 0, 4, 0),
-                    FontSize = 11
+                    FontSize = 11,
+                    Focusable = false,
+                    Background = new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.Parse("#2A2A3E")),
+                    Foreground = new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.Parse("#D0D0E0")),
+                    CornerRadius = new CornerRadius(4)
                 };
                 if (id == currentAid) btn.FontWeight = Avalonia.Media.FontWeight.Bold;
                 btn.Click += (_, _) => { if (btn.Tag is int tid) SwitchAudioTrack(tid); };
@@ -553,6 +559,156 @@ public partial class PlayerPage : UserControl
         StatusText.Text = muted ? "Unmuted" : "Muted";
     }
 
+    private async Task UpdateSubtitleTracksAsync()
+    {
+        try
+        {
+            if (_mpvHandle == IntPtr.Zero || _currentEpisode == null || _libraryService == null) return;
+            SubtitleTracksPanel.Children.Clear();
+            _subtitleTrackInfo.Clear();
+
+            var trackListJson = GetMpvPropertyString("track-list");
+            if (string.IsNullOrEmpty(trackListJson)) return;
+
+            var tracks = JsonDocument.Parse(trackListJson);
+            var subtitleTracks = new List<(int id, string label, string? lang, string? title)>();
+
+            // Add "None" option
+            subtitleTracks.Add((0, "None", null, null));
+            _subtitleTrackInfo[0] = (null, null);
+
+            foreach (var track in tracks.RootElement.EnumerateArray())
+            {
+                if (track.TryGetProperty("type", out var typeEl) && typeEl.GetString() == "sub")
+                {
+                    var id = track.GetProperty("id").GetInt32();
+                    var lang = track.TryGetProperty("lang", out var l) ? l.GetString() : null;
+                    var title = track.TryGetProperty("title", out var t) ? t.GetString() : null;
+                    var label = !string.IsNullOrEmpty(lang) && !string.IsNullOrEmpty(title) ? $"{lang} — {title}"
+                        : title ?? lang ?? $"Track {id}";
+
+                    subtitleTracks.Add((id, label, lang, title));
+                    _subtitleTrackInfo[id] = (lang, title);
+                }
+            }
+
+            var pref = await _libraryService.GetSeriesTrackPreferenceAsync(_currentEpisode.SeriesId);
+            if (pref != null && !string.IsNullOrEmpty(pref.PreferredSubtitleLanguage))
+            {
+                var match = MatchPreferredSubtitleTrack(subtitleTracks, pref.PreferredSubtitleLanguage, pref.PreferredSubtitleName);
+                if (match.id > 0)
+                {
+                    Logger.Log($"Auto-selecting preferred subtitle track {match.id}");
+                    SetOption("sid", $"{match.id}");
+                }
+            }
+
+            var sidStr = GetMpvPropertyString("sid");
+            var currentSid = 0;
+            if (!string.IsNullOrEmpty(sidStr) && sidStr != "no")
+            {
+                if (long.TryParse(sidStr, out var temp))
+                    currentSid = (int)temp;
+            }
+
+            foreach (var (id, label, _, _) in subtitleTracks)
+            {
+                var btn = new Button
+                {
+                    Content = label,
+                    Tag = id,
+                    Padding = new Thickness(8, 4),
+                    Margin = new Thickness(0, 0, 4, 0),
+                    FontSize = 11,
+                    Focusable = false,
+                    Background = new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.Parse("#2A2A3E")),
+                    Foreground = new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.Parse("#D0D0E0")),
+                    CornerRadius = new CornerRadius(4)
+                };
+                if (id == currentSid) btn.FontWeight = Avalonia.Media.FontWeight.Bold;
+                btn.Click += (_, _) => { if (btn.Tag is int tid) SwitchSubtitleTrack(tid); };
+                SubtitleTracksPanel.Children.Add(btn);
+            }
+        }
+        catch (Exception ex) { Logger.LogError("UpdateSubtitleTracks", ex); }
+    }
+
+    private static (int id, string? lang, string? title) MatchPreferredSubtitleTrack(
+        List<(int id, string label, string? lang, string? title)> tracks,
+        string? prefLang, string? prefTitle)
+    {
+        if (!string.IsNullOrEmpty(prefTitle))
+        {
+            var m = tracks.FirstOrDefault(t => string.Equals(t.title, prefTitle, StringComparison.OrdinalIgnoreCase));
+            if (m.title != null) return (m.id, m.lang, m.title);
+        }
+        if (!string.IsNullOrEmpty(prefLang))
+        {
+            var m = tracks.FirstOrDefault(t => string.Equals(t.lang, prefLang, StringComparison.OrdinalIgnoreCase));
+            if (m.lang != null) return (m.id, m.lang, m.title);
+        }
+        return default;
+    }
+
+    private void SwitchSubtitleTrack(int trackId)
+    {
+        if (_mpvHandle == IntPtr.Zero || _currentEpisode == null || _libraryService == null) return;
+
+        if (trackId == 0)
+        {
+            SetOption("sid", "no");
+        }
+        else
+        {
+            SetOption("sid", $"{trackId}");
+        }
+
+        foreach (var child in SubtitleTracksPanel.Children)
+        {
+            if (child is Button btn)
+                btn.FontWeight = (btn.Tag is int id && id == trackId)
+                    ? Avalonia.Media.FontWeight.Bold
+                    : Avalonia.Media.FontWeight.Normal;
+        }
+
+        if (trackId > 0 && _subtitleTrackInfo.TryGetValue(trackId, out var info))
+        {
+            var lang = info.lang ?? "";
+            _ = _libraryService.UpsertSeriesSubtitlePreferenceAsync(_currentEpisode.SeriesId, lang, info.title);
+        }
+    }
+
+    private void CycleSubtitleTrack()
+    {
+        if (_mpvHandle == IntPtr.Zero || _subtitleTrackInfo.Count == 0) return;
+
+        var sidStr = GetMpvPropertyString("sid");
+        var currentSid = 0;
+        if (!string.IsNullOrEmpty(sidStr) && sidStr != "no")
+            int.TryParse(sidStr, out currentSid);
+
+        var trackIds = _subtitleTrackInfo.Keys.OrderBy(k => k).ToList();
+        if (trackIds.Count == 0) return;
+
+        var currentIndex = trackIds.IndexOf(currentSid);
+        var nextIndex = (currentIndex + 1) % trackIds.Count;
+        var nextId = trackIds[nextIndex];
+        SwitchSubtitleTrack(nextId);
+
+        // Show brief status
+        if (nextId == 0)
+        {
+            StatusText.Text = "Subtitles: Off";
+        }
+        else if (_subtitleTrackInfo.TryGetValue(nextId, out var info))
+        {
+            var label = !string.IsNullOrEmpty(info.lang) && !string.IsNullOrEmpty(info.title)
+                ? $"{info.lang} — {info.title}"
+                : info.title ?? info.lang ?? $"Track {nextId}";
+            StatusText.Text = $"Subtitle: {label}";
+        }
+    }
+
     private void StartPositionTimer()
     {
         _positionTimer?.Stop();
@@ -583,11 +739,12 @@ public partial class PlayerPage : UserControl
             {
                 if (GetCursorPos(out var cursorPos))
                 {
-                    // Initialize on first run
-                    if (_lastCursorX == 0 && _lastCursorY == 0)
+                    if (!_cursorInitialized)
                     {
+                        // Snapshot initial position without triggering movement
                         _lastCursorX = cursorPos.X;
                         _lastCursorY = cursorPos.Y;
+                        _cursorInitialized = true;
                     }
                     else if (cursorPos.X != _lastCursorX || cursorPos.Y != _lastCursorY)
                     {
@@ -773,28 +930,18 @@ public partial class PlayerPage : UserControl
         _isFullscreen = fullscreen;
         if (fullscreen)
         {
-            // In fullscreen: controls overlay the video (span both rows)
-            Grid.SetRow(ControlsBar, 0);
-            Grid.SetRowSpan(ControlsBar, 2);
-            ControlsBar.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Bottom;
-
-            // Initialize cursor tracking when entering fullscreen
-            if (OperatingSystem.IsWindows() && GetCursorPos(out var pos))
-            {
-                _lastCursorX = pos.X;
-                _lastCursorY = pos.Y;
-            }
-
-            ShowControls(); // Show controls immediately when entering fullscreen
+            // Controls stay in Row 1 (never move into Row 0 HWND region)
+            // Grid layout (RowDefinitions="*,Auto") naturally overlays Row 1 at bottom
+            _cursorInitialized = false;   // Reset cursor tracking for fresh state
+            ShowControls();
             ResetControlsHideTimer();
         }
         else
         {
-            // In windowed: controls in their own row (Row 1), always visible
-            Grid.SetRow(ControlsBar, 1);
-            Grid.SetRowSpan(ControlsBar, 1);
-            ControlsBar.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Stretch;
+            // Windowed mode: controls always visible
             StopControlsHideTimer();
+            _cursorInitialized = false;
+            ShowControls();
         }
     }
 
@@ -824,10 +971,20 @@ public partial class PlayerPage : UserControl
     {
         _controlsHideTimer?.Stop();
         // Only auto-hide controls in fullscreen mode; in windowed mode they stay visible
-        if (_currentEpisode == null || !_isFullscreen) return;
+        // Note: _currentEpisode check is in HideControls(), not here, so timer can arm even before playback
+        if (!_isFullscreen) return;
         _controlsHideTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
         _controlsHideTimer.Tick += (_, _) => { _controlsHideTimer?.Stop(); HideControls(); };
         _controlsHideTimer.Start();
+    }
+
+    private void OnControlsBarPointerEntered(object? sender, PointerEventArgs e)
+        => _mouseOverControls = true;
+
+    private void OnControlsBarPointerExited(object? sender, PointerEventArgs e)
+    {
+        _mouseOverControls = false;
+        if (_isFullscreen) ResetControlsHideTimer();
     }
 
     private void StopControlsHideTimer()
@@ -857,8 +1014,9 @@ public partial class PlayerPage : UserControl
         NowPlayingText.Text = "No file loaded";
         StatusText.Text = "Stopped";
         AudioTracksPanel.Children.Clear();
+        SubtitleTracksPanel.Children.Clear();
         PlaceholderText.IsVisible = true;
-        PlayPauseButton.Content = "Play";
+        PlayPauseButton.Content = "▶ Play";
         ProgressSlider.Value = 0;
         ProgressSlider.Maximum = 100;
         TimeCurrentText.Text = "0:00";

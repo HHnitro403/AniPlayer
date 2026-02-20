@@ -185,4 +185,21 @@ public class LibraryService : ILibraryService
             Queries.UpsertSeriesTrackPreference,
             new { seriesId, audioLang = audioLanguage, audioTitle, audioTrackId, subLang = (string?)null, subName = (string?)null });
     }
+
+    public async Task UpsertSeriesSubtitlePreferenceAsync(int seriesId, string subtitleLanguage, string? subtitleName)
+    {
+        using var conn = _db.CreateConnection();
+        // Preserve existing audio preferences while updating subtitle preferences
+        var existing = await GetSeriesTrackPreferenceAsync(seriesId);
+        await conn.ExecuteAsync(
+            Queries.UpsertSeriesTrackPreference,
+            new {
+                seriesId,
+                audioLang = existing?.PreferredAudioLanguage,
+                audioTitle = existing?.PreferredAudioTitle,
+                audioTrackId = existing?.PreferredAudioTrackId,
+                subLang = subtitleLanguage,
+                subName = subtitleName
+            });
+    }
 }
