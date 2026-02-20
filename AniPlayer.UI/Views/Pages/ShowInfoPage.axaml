@@ -65,6 +65,77 @@
 
             <Separator Margin="0,8"/>
 
+            <!-- Playback Preferences Section -->
+            <Border Background="#1E1E2E" CornerRadius="8" Padding="20,16" BorderBrush="#2A2A3E" BorderThickness="1">
+                <StackPanel Spacing="12">
+                    <TextBlock Text="📊 Playback Preferences" FontSize="16" FontWeight="SemiBold" Foreground="#E8E8F8"/>
+
+                    <!-- Current Preferences Display -->
+                    <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto" Margin="0,8,0,0">
+                        <TextBlock Grid.Row="0" Text="🎵 Audio:" FontSize="13" Foreground="#A8A8C8" VerticalAlignment="Center"/>
+                        <TextBlock x:Name="AudioPreferenceText" Grid.Row="0" Grid.Column="1" Text="Auto (not set)" FontSize="13"
+                                   Foreground="#D0D0E0" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                        <Button x:Name="ResetAudioButton" Grid.Row="0" Grid.Column="2" Content="Reset" Padding="8,4" FontSize="11"
+                                Focusable="False" Click="ResetAudioPreference_Click" Background="#3A3A4E" Foreground="#E0E0F0" CornerRadius="4"/>
+
+                        <TextBlock Grid.Row="1" Text="💬 Subtitles:" FontSize="13" Foreground="#A8A8C8" Margin="0,8,0,0" VerticalAlignment="Center"/>
+                        <TextBlock x:Name="SubtitlePreferenceText" Grid.Row="1" Grid.Column="1" Text="Auto (not set)" FontSize="13"
+                                   Foreground="#D0D0E0" Margin="12,8,0,0" VerticalAlignment="Center"/>
+                        <Button x:Name="ResetSubtitleButton" Grid.Row="1" Grid.Column="2" Content="Reset" Padding="8,4" FontSize="11" Margin="0,8,0,0"
+                                Focusable="False" Click="ResetSubtitlePreference_Click" Background="#3A3A4E" Foreground="#E0E0F0" CornerRadius="4"/>
+                    </Grid>
+
+                    <Separator Opacity="0.2" Margin="0,8"/>
+
+                    <!-- Manual Subtitle Override Toggle -->
+                    <CheckBox x:Name="ManualSubtitleToggle" Content="Enable manual subtitle override (external files)"
+                              Foreground="#E8E8F8" FontSize="13" IsChecked="False" Checked="ManualSubtitleToggle_Changed" Unchecked="ManualSubtitleToggle_Changed"/>
+
+                    <!-- Manual Override Controls (collapsed by default) -->
+                    <StackPanel x:Name="ManualSubtitlePanel" IsVisible="False" Spacing="12" Margin="0,8,0,0">
+                        <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto">
+                            <!-- Episode Selector -->
+                            <TextBlock Grid.Row="0" Text="Select Episode:" FontSize="12" Foreground="#A8A8C8" Margin="0,0,0,4"/>
+                            <ComboBox x:Name="OverrideEpisodeSelector" Grid.Row="1" Grid.ColumnSpan="2" HorizontalAlignment="Stretch"
+                                      SelectionChanged="OverrideEpisodeSelector_Changed"/>
+
+                            <!-- Subtitle File Picker -->
+                            <TextBlock Grid.Row="2" Text="Subtitle File:" FontSize="12" Foreground="#A8A8C8" Margin="0,12,0,4"/>
+                            <StackPanel Grid.Row="2" Grid.Column="1" Orientation="Horizontal" Spacing="8" Margin="0,12,0,0">
+                                <Button x:Name="BrowseSubtitleButton" Content="Browse..." Padding="12,6" FontSize="12"
+                                        Focusable="False" Click="BrowseSubtitle_Click" Background="#4CC2FF" Foreground="White" CornerRadius="4"/>
+                                <Button x:Name="SaveSubtitleOverrideButton" Content="Save Override" Padding="12,6" FontSize="12"
+                                        Focusable="False" Click="SaveSubtitleOverride_Click" Background="#3A3A4E" Foreground="#E0E0F0" CornerRadius="4" IsEnabled="False"/>
+                                <Button x:Name="ClearSubtitleOverrideButton" Content="Clear Override" Padding="12,6" FontSize="12"
+                                        Focusable="False" Click="ClearSubtitleOverride_Click" Background="#3A3A4E" Foreground="#E0E0F0" CornerRadius="4"/>
+                            </StackPanel>
+                        </Grid>
+
+                        <TextBlock x:Name="SelectedSubtitlePath" Text="No file selected" FontSize="11" Foreground="#8888A8" Margin="0,4,0,0"/>
+
+                        <!-- Current Overrides List -->
+                        <Border Background="#252535" CornerRadius="4" Padding="12" Margin="0,8,0,0">
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="Active Overrides:" FontSize="12" FontWeight="SemiBold" Foreground="#A8A8C8"/>
+                                <ItemsControl x:Name="OverridesList" Margin="0,8,0,0">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="local:ShowInfoPage+SubtitleOverride">
+                                            <Grid ColumnDefinitions="*,Auto" Margin="0,2">
+                                                <TextBlock Text="{Binding DisplayText}" FontSize="11" Foreground="#D0D0E0" VerticalAlignment="Center"/>
+                                                <Button Content="Remove" Tag="{Binding EpisodeId}" Padding="6,3" FontSize="10" Grid.Column="1"
+                                                        Focusable="False" Click="RemoveOverride_Click" Background="#4A2A2A" Foreground="#FFB0B0" CornerRadius="3"/>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <Separator Margin="0,8"/>
+
             <!-- Episode list -->
             <ItemsControl x:Name="SeasonListControl" ItemsSource="{Binding SeasonGroups}">
                 <ItemsControl.ItemTemplate>

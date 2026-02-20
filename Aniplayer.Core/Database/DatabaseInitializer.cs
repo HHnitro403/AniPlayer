@@ -84,6 +84,14 @@ public class DatabaseInitializer
                 "ALTER TABLE Series ADD COLUMN season_number INTEGER NOT NULL DEFAULT 1;").ConfigureAwait(false);
         }
         catch (SqliteException) { /* column already exists — safe to ignore */ }
+
+        // Add external_subtitle_path column (for manual subtitle file override)
+        try
+        {
+            await connection.ExecuteAsync(
+                "ALTER TABLE Episodes ADD COLUMN external_subtitle_path TEXT;").ConfigureAwait(false);
+        }
+        catch (SqliteException) { /* column already exists — safe to ignore */ }
     }
 
         private static class Schema

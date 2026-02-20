@@ -202,4 +202,12 @@ public class LibraryService : ILibraryService
                 subName = subtitleName
             });
     }
+
+    public async Task SetEpisodeExternalSubtitleAsync(int episodeId, string? subtitlePath)
+    {
+        using var conn = _db.CreateConnection();
+        await conn.ExecuteAsync(
+            "UPDATE Episodes SET external_subtitle_path = @subtitlePath WHERE id = @episodeId",
+            new { episodeId, subtitlePath });
+    }
 }

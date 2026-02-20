@@ -35,4 +35,7 @@ public interface ILibraryService
     Task<TrackPreferences?> GetSeriesTrackPreferenceAsync(int seriesId);
     Task UpsertSeriesAudioPreferenceAsync(int seriesId, string audioLanguage, string? audioTitle, int? audioTrackId = null);
     Task UpsertSeriesSubtitlePreferenceAsync(int seriesId, string subtitleLanguage, string? subtitleName);
+
+    // External Subtitle Override
+    Task SetEpisodeExternalSubtitleAsync(int episodeId, string? subtitlePath);
 }

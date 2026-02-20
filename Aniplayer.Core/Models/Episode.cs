@@ -13,6 +13,7 @@ public class Episode
     public int? DurationSeconds { get; set; }
     public string? ThumbnailPath { get; set; }
     public int? AnilistEpId { get; set; }
+    public string? ExternalSubtitlePath { get; set; }
     public string CreatedAt { get; set; } = string.Empty;
 
     // Populated by chapter detection

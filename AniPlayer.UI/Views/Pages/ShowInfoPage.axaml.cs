@@ -25,6 +25,9 @@ public partial class ShowInfoPage : UserControl
     public event Action? MetadataRefreshRequested;
 
     private List<Series> _seriesList = new();
+    private List<Episode> _allEpisodes = new();
+    private ILibraryService? _libraryService;
+    private string? _selectedSubtitleFilePath;
 
     public class SeasonGroup
     {
@@ -33,12 +36,21 @@ public partial class ShowInfoPage : UserControl
         public bool IsExpanded { get; set; } = true;
     }
 
+    public class SubtitleOverride
+    {
+        public int EpisodeId { get; set; }
+        public string DisplayText { get; set; } = string.Empty;
+    }
+
     public ObservableCollection<SeasonGroup> SeasonGroups { get; } = new();
+    public ObservableCollection<SubtitleOverride> SubtitleOverrides { get; } = new();
 
     public ShowInfoPage()
     {
         InitializeComponent();
         SeasonListControl.ItemsSource = SeasonGroups;
+        OverridesList.ItemsSource = SubtitleOverrides;
+        _libraryService = App.Services.GetService<ILibraryService>();
     }
 
     private void OnEpisodePlayRequest(object? sender, RoutedEventArgs e)
@@ -49,14 +61,18 @@ public partial class ShowInfoPage : UserControl
         }
     }
 
-    public void LoadSeriesData(List<Series> seriesGroup, List<Episode> allEpisodes)
+    public async void LoadSeriesData(List<Series> seriesGroup, List<Episode> allEpisodes)
     {
         _seriesList = seriesGroup; // Store the list for the refresh button
+        _allEpisodes = allEpisodes;
         var sortedSeries = seriesGroup.OrderBy(s => s.SeasonNumber == 0 ? 999 : s.SeasonNumber).ToList();
         var representative = sortedSeries.FirstOrDefault();
         if (representative == null) return;
 
         Logger.Log($"[ShowInfoPage] LoadSeriesData: group='{representative.SeriesGroupName}', seasons={sortedSeries.Count}, episodes={allEpisodes.Count}", LogRegion.UI);
+
+        // Load track preferences
+        await LoadTrackPreferencesAsync(representative.Id);
 
         // Header info (from representative series)
         TitleText.Text = representative.SeriesGroupName;
@@ -167,6 +183,239 @@ public partial class ShowInfoPage : UserControl
         {
             RefreshMetadataButton.Content = "Refresh Metadata";
             RefreshMetadataButton.IsEnabled = true;
+        }
+    }
+
+    private async Task LoadTrackPreferencesAsync(int representativeSeriesId)
+    {
+        if (_libraryService == null) return;
+
+        try
+        {
+            var prefs = await _libraryService.GetSeriesTrackPreferenceAsync(representativeSeriesId);
+            if (prefs != null)
+            {
+                AudioPreferenceText.Text = !string.IsNullOrEmpty(prefs.PreferredAudioLanguage)
+                    ? $"{prefs.PreferredAudioLanguage}" + (!string.IsNullOrEmpty(prefs.PreferredAudioTitle) ? $" — {prefs.PreferredAudioTitle}" : "")
+                    : "Auto (not set)";
+
+                SubtitlePreferenceText.Text = !string.IsNullOrEmpty(prefs.PreferredSubtitleLanguage)
+                    ? $"{prefs.PreferredSubtitleLanguage}" + (!string.IsNullOrEmpty(prefs.PreferredSubtitleName) ? $" — {prefs.PreferredSubtitleName}" : "")
+                    : "Auto (not set)";
+            }
+            else
+            {
+                AudioPreferenceText.Text = "Auto (not set)";
+                SubtitlePreferenceText.Text = "Auto (not set)";
+            }
+
+            // Load subtitle overrides
+            RefreshSubtitleOverridesList();
+        }
+        catch (Exception ex)
+        {
+            Logger.Log($"[ShowInfoPage] Failed to load track preferences: {ex.Message}", LogRegion.UI);
+        }
+    }
+
+    private async void ResetAudioPreference_Click(object? sender, RoutedEventArgs e)
+    {
+        if (_libraryService == null || !_seriesList.Any()) return;
+
+        try
+        {
+            var seriesId = _seriesList.First().Id;
+            await _libraryService.UpsertSeriesAudioPreferenceAsync(seriesId, "", null, null);
+            AudioPreferenceText.Text = "Auto (not set)";
+        }
+        catch (Exception ex)
+        {
+            Logger.Log($"[ShowInfoPage] Failed to reset audio preference: {ex.Message}", LogRegion.UI);
+        }
+    }
+
+    private async void ResetSubtitlePreference_Click(object? sender, RoutedEventArgs e)
+    {
+        if (_libraryService == null || !_seriesList.Any()) return;
+
+        try
+        {
+            var seriesId = _seriesList.First().Id;
+            await _libraryService.UpsertSeriesSubtitlePreferenceAsync(seriesId, "", null);
+            SubtitlePreferenceText.Text = "Auto (not set)";
+        }
+        catch (Exception ex)
+        {
+            Logger.Log($"[ShowInfoPage] Failed to reset subtitle preference: {ex.Message}", LogRegion.UI);
+        }
+    }
+
+    private void ManualSubtitleToggle_Changed(object? sender, RoutedEventArgs e)
+    {
+        ManualSubtitlePanel.IsVisible = ManualSubtitleToggle.IsChecked == true;
+
+        if (ManualSubtitlePanel.IsVisible)
+        {
+            // Populate episode selector
+            OverrideEpisodeSelector.Items.Clear();
+            foreach (var episode in _allEpisodes)
+            {
+                OverrideEpisodeSelector.Items.Add(new ComboBoxItem
+                {
+                    Content = $"{episode.DisplayName} - {Path.GetFileName(episode.FilePath)}",
+                    Tag = episode.Id
+                });
+            }
+
+            if (OverrideEpisodeSelector.Items.Count > 0)
+                OverrideEpisodeSelector.SelectedIndex = 0;
+
+            RefreshSubtitleOverridesList();
+        }
+    }
+
+    private void OverrideEpisodeSelector_Changed(object? sender, SelectionChangedEventArgs e)
+    {
+        if (OverrideEpisodeSelector.SelectedItem is ComboBoxItem item && item.Tag is int episodeId)
+        {
+            var episode = _allEpisodes.FirstOrDefault(ep => ep.Id == episodeId);
+            if (episode != null && !string.IsNullOrEmpty(episode.ExternalSubtitlePath))
+            {
+                _selectedSubtitleFilePath = episode.ExternalSubtitlePath;
+                SelectedSubtitlePath.Text = Path.GetFileName(episode.ExternalSubtitlePath);
+                SaveSubtitleOverrideButton.IsEnabled = true;
+            }
+            else
+            {
+                _selectedSubtitleFilePath = null;
+                SelectedSubtitlePath.Text = "No file selected";
+                SaveSubtitleOverrideButton.IsEnabled = false;
+            }
+        }
+    }
+
+    private async void BrowseSubtitle_Click(object? sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var dialog = new Avalonia.Platform.Storage.FilePickerOpenOptions
+            {
+                Title = "Select Subtitle File",
+                AllowMultiple = false,
+                FileTypeFilter = new[]
+                {
+                    new Avalonia.Platform.Storage.FilePickerFileType("Subtitle Files")
+                    {
+                        Patterns = new[] { "*.srt", "*.ass", "*.ssa", "*.vtt", "*.sub" }
+                    },
+                    new Avalonia.Platform.Storage.FilePickerFileType("All Files") { Patterns = new[] { "*.*" } }
+                }
+            };
+
+            var window = TopLevel.GetTopLevel(this) as Window;
+            if (window != null)
+            {
+                var result = await window.StorageProvider.OpenFilePickerAsync(dialog);
+                if (result.Count > 0)
+                {
+                    _selectedSubtitleFilePath = result[0].Path.LocalPath;
+                    SelectedSubtitlePath.Text = Path.GetFileName(_selectedSubtitleFilePath);
+                    SaveSubtitleOverrideButton.IsEnabled = true;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Log($"[ShowInfoPage] Failed to browse subtitle file: {ex.Message}", LogRegion.UI);
+        }
+    }
+
+    private async void SaveSubtitleOverride_Click(object? sender, RoutedEventArgs e)
+    {
+        if (_libraryService == null || OverrideEpisodeSelector.SelectedItem is not ComboBoxItem item || item.Tag is not int episodeId)
+            return;
+
+        if (string.IsNullOrEmpty(_selectedSubtitleFilePath))
+        {
+            SelectedSubtitlePath.Text = "Please select a subtitle file first";
+            return;
+        }
+
+        try
+        {
+            await _libraryService.SetEpisodeExternalSubtitleAsync(episodeId, _selectedSubtitleFilePath);
+            SelectedSubtitlePath.Text = $"✓ Saved: {Path.GetFileName(_selectedSubtitleFilePath)}";
+
+            // Update local episode list
+            var episode = _allEpisodes.FirstOrDefault(ep => ep.Id == episodeId);
+            if (episode != null)
+                episode.ExternalSubtitlePath = _selectedSubtitleFilePath;
+
+            RefreshSubtitleOverridesList();
+        }
+        catch (Exception ex)
+        {
+            Logger.Log($"[ShowInfoPage] Failed to save subtitle override: {ex.Message}", LogRegion.UI);
+            SelectedSubtitlePath.Text = $"Error: {ex.Message}";
+        }
+    }
+
+    private async void ClearSubtitleOverride_Click(object? sender, RoutedEventArgs e)
+    {
+        if (_libraryService == null || OverrideEpisodeSelector.SelectedItem is not ComboBoxItem item || item.Tag is not int episodeId)
+            return;
+
+        try
+        {
+            await _libraryService.SetEpisodeExternalSubtitleAsync(episodeId, null);
+            _selectedSubtitleFilePath = null;
+            SelectedSubtitlePath.Text = "Override cleared";
+
+            // Update local episode list
+            var episode = _allEpisodes.FirstOrDefault(ep => ep.Id == episodeId);
+            if (episode != null)
+                episode.ExternalSubtitlePath = null;
+
+            RefreshSubtitleOverridesList();
+        }
+        catch (Exception ex)
+        {
+            Logger.Log($"[ShowInfoPage] Failed to clear subtitle override: {ex.Message}", LogRegion.UI);
+        }
+    }
+
+    private async void RemoveOverride_Click(object? sender, RoutedEventArgs e)
+    {
+        if (_libraryService == null || sender is not Button btn || btn.Tag is not int episodeId)
+            return;
+
+        try
+        {
+            await _libraryService.SetEpisodeExternalSubtitleAsync(episodeId, null);
+
+            // Update local episode list
+            var episode = _allEpisodes.FirstOrDefault(ep => ep.Id == episodeId);
+            if (episode != null)
+                episode.ExternalSubtitlePath = null;
+
+            RefreshSubtitleOverridesList();
+        }
+        catch (Exception ex)
+        {
+            Logger.Log($"[ShowInfoPage] Failed to remove override: {ex.Message}", LogRegion.UI);
+        }
+    }
+
+    private void RefreshSubtitleOverridesList()
+    {
+        SubtitleOverrides.Clear();
+        foreach (var episode in _allEpisodes.Where(ep => !string.IsNullOrEmpty(ep.ExternalSubtitlePath)))
+        {
+            SubtitleOverrides.Add(new SubtitleOverride
+            {
+                EpisodeId = episode.Id,
+                DisplayText = $"{episode.DisplayName} → {Path.GetFileName(episode.ExternalSubtitlePath)}"
+            });
         }
     }
 }

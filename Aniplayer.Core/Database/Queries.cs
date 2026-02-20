@@ -112,7 +112,8 @@ public static class Queries
         SELECT id AS Id, series_id AS SeriesId, file_path AS FilePath, title AS Title,
                episode_number AS EpisodeNumber, episode_type AS EpisodeType,
                duration_seconds AS DurationSeconds, thumbnail_path AS ThumbnailPath,
-               anilist_ep_id AS AnilistEpId, created_at AS CreatedAt
+               anilist_ep_id AS AnilistEpId, external_subtitle_path AS ExternalSubtitlePath,
+               created_at AS CreatedAt
         FROM Episodes WHERE series_id = @seriesId
         ORDER BY file_path, episode_number";
 
@@ -120,14 +121,16 @@ public static class Queries
         SELECT id AS Id, series_id AS SeriesId, file_path AS FilePath, title AS Title,
                episode_number AS EpisodeNumber, episode_type AS EpisodeType,
                duration_seconds AS DurationSeconds, thumbnail_path AS ThumbnailPath,
-               anilist_ep_id AS AnilistEpId, created_at AS CreatedAt
+               anilist_ep_id AS AnilistEpId, external_subtitle_path AS ExternalSubtitlePath,
+               created_at AS CreatedAt
         FROM Episodes WHERE id = @id";
 
     public const string GetEpisodeByFilePath = @"
         SELECT id AS Id, series_id AS SeriesId, file_path AS FilePath, title AS Title,
                episode_number AS EpisodeNumber, episode_type AS EpisodeType,
                duration_seconds AS DurationSeconds, thumbnail_path AS ThumbnailPath,
-               anilist_ep_id AS AnilistEpId, created_at AS CreatedAt
+               anilist_ep_id AS AnilistEpId, external_subtitle_path AS ExternalSubtitlePath,
+               created_at AS CreatedAt
         FROM Episodes WHERE file_path = @filePath";
 
     public const string InsertEpisode = @"

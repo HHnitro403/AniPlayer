@@ -345,6 +345,14 @@ public partial class PlayerPage : UserControl
         _lockStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 1, FileOptions.Asynchronous);
 
         SetOption("pause", "no");
+
+        // Load external subtitle if one is set for this episode
+        if (_currentEpisode != null && !string.IsNullOrEmpty(_currentEpisode.ExternalSubtitlePath) && File.Exists(_currentEpisode.ExternalSubtitlePath))
+        {
+            Logger.Log($"Loading external subtitle: {_currentEpisode.ExternalSubtitlePath}");
+            SetOption("sub-file", _currentEpisode.ExternalSubtitlePath);
+        }
+
         VideoHostControl.Renderer?.Render();
 
         PlaceholderText.IsVisible = false;
@@ -807,7 +815,7 @@ public partial class PlayerPage : UserControl
         }
         else if (_currentEpisode.HasOutro && now >= _currentEpisode.OutroStart && _playlistIndex < _playlist.Count - 1)
         {
-            if (!SkipOverlayButton.IsVisible || (string)SkipButtonText.Text != "Next Episode")
+            if (!SkipOverlayButton.IsVisible || SkipButtonText.Text as string != "Next Episode")
             {
                 SkipButtonText.Text = "Next Episode";
                 SkipOverlayButton.Tag = -1.0;
