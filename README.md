@@ -7,8 +7,11 @@ A cross-platform desktop anime media player built with C# and Avalonia UI. AniPl
 - **Library Management** — Add folders containing anime. AniPlayer auto-detects series, episodes, specials, OVAs, and more from your folder structure.
 - **Smart Episode Parsing** — Uses AnitomySharp to parse anime filenames (release groups, episode numbers, titles, resolution, etc.) with regex fallback.
 - **AniList Metadata** — Automatically fetches cover images, synopses, genres, scores, and episode counts from the AniList GraphQL API.
-- **mpv Video Playback** — Hardware-accelerated playback via libmpv with audio/subtitle track selection, volume control, and keyboard shortcuts.
-- **Watch Progress Tracking** — Automatically saves playback position every 5 seconds and resumes where you left off. Marks episodes as completed at 90%.
+- **mpv Video Playback** — Hardware-accelerated playback via libmpv with audio/subtitle track selection, volume control, seek buttons, and comprehensive keyboard shortcuts.
+- **Watch Progress Tracking** — Automatically saves playback position every 5 seconds and resumes where you left off. Marks episodes as completed at 90%. Progress bars visible in episode lists.
+- **Intro/Outro Skip** — Automatically detects intro and outro chapters and provides skip buttons during playback.
+- **Manual Subtitle Override** — Load external subtitle files (.srt, .ass, .vtt) for specific episodes.
+- **Track Preferences** — Remembers your preferred audio and subtitle tracks per series.
 - **File Watching** — Monitors library folders for new/renamed/deleted files and re-scans automatically with a debounce pattern.
 - **Cross-Platform** — Targets .NET 9 and Avalonia UI 11, runs on Windows, Linux, and macOS.
 
@@ -105,13 +108,13 @@ Enable verbose regions in code: `Logger.EnabledRegions = LogRegion.All;`
 
 ## Keyboard Shortcuts
 
-AniPlayer supports the following keyboard shortcuts when the player page is active:
+AniPlayer supports comprehensive keyboard shortcuts when the player page is active:
 
 | Key | Action |
 |-----|--------|
 | **Space** | Play / Pause |
-| **Left Arrow** | Seek backward 5 seconds |
-| **Right Arrow** | Seek forward 5 seconds |
+| **Left Arrow** | Seek backward 5 seconds (also triggers ⏪ button) |
+| **Right Arrow** | Seek forward 5 seconds (also triggers ⏩ button) |
 | **Up Arrow** | Increase volume (+10) |
 | **Down Arrow** | Decrease volume (-5) |
 | **A** | Cycle audio track |
@@ -122,7 +125,19 @@ AniPlayer supports the following keyboard shortcuts when the player page is acti
 | **F11** | Toggle fullscreen (alternative) |
 | **Escape** | Exit fullscreen |
 
+All shortcuts work regardless of UI visibility state.
+
 ## Building
+
+### Prerequisites
+
+- **.NET 9 SDK** — [Download here](https://dotnet.microsoft.com/download/dotnet/9.0)
+- **libmpv** — **Required dependency** (must be downloaded separately):
+  - **Windows:** Download `libmpv-2.dll` from [mpv.io](https://mpv.io/installation/) or [Shinchiro's builds](https://sourceforge.net/projects/mpv-player-windows/files/libmpv/). Place it in `AniPlayer.UI/lib/win-x64/libmpv-2.dll`.
+  - **Linux:** Install via package manager: `sudo apt install libmpv-dev` (Debian/Ubuntu) or `sudo pacman -S mpv` (Arch)
+  - **macOS:** Install via Homebrew: `brew install mpv`
+
+### Build Steps
 
 ```bash
 dotnet restore
@@ -130,7 +145,7 @@ dotnet build
 dotnet run --project AniPlayer.UI
 ```
 
-Requires .NET 9 SDK. On Windows, `libmpv-2.dll` is bundled in `AniPlayer.UI/lib/win-x64/`. On Linux, install mpv via your package manager.
+For detailed contribution guidelines, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
