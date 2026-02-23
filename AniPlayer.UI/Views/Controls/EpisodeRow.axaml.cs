@@ -30,8 +30,16 @@ public partial class EpisodeRow : UserControl
         TypeBadge.IsVisible = episodeType != "EPISODE";
         TypeBadgeText.Text = episodeType;
 
-        // The ShowInfoPage does not currently track progress for all episodes,
-        // so the progress bar is always hidden here.
-        ProgressBar.IsVisible = false;
+        // Show progress bar for in-progress episodes (not completed, has progress)
+        if (episode.Progress != null && !episode.Progress.IsCompleted && episode.Progress.ProgressPercent > 0)
+        {
+            ProgressBar.IsVisible = true;
+            var progressWidth = 60 * episode.Progress.ProgressPercent; // Max width is 60px
+            ProgressFill.Width = progressWidth;
+        }
+        else
+        {
+            ProgressBar.IsVisible = false;
+        }
     }
 }

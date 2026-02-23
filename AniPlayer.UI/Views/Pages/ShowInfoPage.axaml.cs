@@ -27,6 +27,7 @@ public partial class ShowInfoPage : UserControl
     private List<Series> _seriesList = new();
     private List<Episode> _allEpisodes = new();
     private ILibraryService? _libraryService;
+    private IWatchProgressService? _watchProgressService;
     private string? _selectedSubtitleFilePath;
 
     public class SeasonGroup
@@ -51,6 +52,7 @@ public partial class ShowInfoPage : UserControl
         SeasonListControl.ItemsSource = SeasonGroups;
         OverridesList.ItemsSource = SubtitleOverrides;
         _libraryService = App.Services.GetService<ILibraryService>();
+        _watchProgressService = App.Services.GetService<IWatchProgressService>();
     }
 
     private void OnEpisodePlayRequest(object? sender, RoutedEventArgs e)
@@ -112,6 +114,32 @@ public partial class ShowInfoPage : UserControl
                     Background = new SolidColorBrush(Color.FromArgb(30, 255, 255, 255)),
                     Child = new TextBlock { Text = genre, FontSize = 12 },
                 });
+            }
+        }
+
+        // Fetch watch progress for all episodes in this series group
+        if (_watchProgressService != null)
+        {
+            try
+            {
+                foreach (var series in sortedSeries)
+                {
+                    var progressList = await _watchProgressService.GetProgressForSeriesAsync(series.Id);
+                    var progressDict = progressList.ToDictionary(p => p.EpisodeId);
+
+                    foreach (var episode in allEpisodes.Where(e => e.SeriesId == series.Id))
+                    {
+                        if (progressDict.TryGetValue(episode.Id, out var progress))
+                        {
+                            episode.Progress = progress;
+                        }
+                    }
+                }
+                Logger.Log($"[ShowInfoPage] Loaded progress for {allEpisodes.Count(e => e.Progress != null)} episodes", LogRegion.UI);
+            }
+            catch (Exception ex)
+            {
+                Logger.Log($"[ShowInfoPage] Failed to load progress: {ex.Message}", LogRegion.UI);
             }
         }
 

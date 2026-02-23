@@ -7,7 +7,6 @@ using Aniplayer.Core.Interfaces;
 using Aniplayer.Core.Services;
 using System;
 using Aniplayer.Core.Constants;
-using AniPlayer.UI.Services;
 
 namespace AniPlayer.UI
 {

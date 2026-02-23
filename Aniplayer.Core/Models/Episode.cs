@@ -16,6 +16,9 @@ public class Episode
     public string? ExternalSubtitlePath { get; set; }
     public string CreatedAt { get; set; } = string.Empty;
 
+    // UI-only: Populated when displaying episode lists with progress
+    public WatchProgress? Progress { get; set; }
+
     // Populated by chapter detection
     public double IntroStart { get; set; } = -1;
     public double IntroEnd { get; set; } = -1;

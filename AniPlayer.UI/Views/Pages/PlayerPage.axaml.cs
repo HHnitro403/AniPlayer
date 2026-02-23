@@ -43,6 +43,7 @@ public partial class PlayerPage : UserControl
     private IReadOnlyList<Episode> _playlist = Array.Empty<Episode>();
     private int _playlistIndex = -1;
     private Episode? _currentEpisode;
+    private bool _isCurrentEpisodeCompleted = false;
 
     // Seek debouncing
     private long _lastSeekTicks;
@@ -137,6 +138,10 @@ public partial class PlayerPage : UserControl
 
             SetOption("vo", "libmpv");
             LibMpvInterop.mpv_request_log_messages(_mpvHandle, Encoding.UTF8.GetBytes("info\0"));
+
+            // Disable MPV's built-in OSD and on-screen controller
+            SetOption("osd-level", "0");      // Disable OSD messages
+            SetOption("osc", "no");           // Disable on-screen controller (bottom controls)
 
             SetOption("input-default-bindings", "yes");
             SetOption("input-vo-keyboard", "yes");
@@ -303,6 +308,7 @@ public partial class PlayerPage : UserControl
         Logger.Log($"[State] Changing to new episode {newEpisode.Id} ('{newEpisode.FilePath}')");
         _currentEpisode = newEpisode;
         _playlistIndex = _playlist.ToList().FindIndex(e => e.Id == newEpisode.Id);
+        _isCurrentEpisodeCompleted = false; // Reset completion latch for new episode
 
         await LoadFileIntoMpvAsync(newEpisode.FilePath);
 
@@ -863,11 +869,22 @@ public partial class PlayerPage : UserControl
 
                 if (shouldMarkCompleted)
                 {
-                    Logger.Log($"Marking episode {_currentEpisode.Id} as completed ({pos:F0}/{dur:F0}s)");
-                    await _watchProgressService.MarkCompletedAsync(_currentEpisode.Id);
+                    // Use state latch to prevent duplicate completion calls
+                    if (!_isCurrentEpisodeCompleted)
+                    {
+                        Logger.Log($"Marking episode {_currentEpisode.Id} as completed ({pos:F0}/{dur:F0}s)");
+                        await _watchProgressService.MarkCompletedAsync(_currentEpisode.Id);
+                        _isCurrentEpisodeCompleted = true;
+                    }
                 }
                 else
                 {
+                    // If user rewound below completion threshold, reset the latch
+                    if (_isCurrentEpisodeCompleted)
+                    {
+                        Logger.Log($"Episode {_currentEpisode.Id} rewound below completion threshold, resetting latch");
+                        _isCurrentEpisodeCompleted = false;
+                    }
                     await _watchProgressService.UpdateProgressAsync(_currentEpisode.Id, posSec, durSec, force);
                 }
             }

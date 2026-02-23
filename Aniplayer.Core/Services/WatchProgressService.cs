@@ -12,6 +12,7 @@ public class WatchProgressService : IWatchProgressService
 {
     private readonly IDatabaseService _db;
     private readonly ConcurrentDictionary<int, long> _lastSaveTimes = new();
+    private readonly ConcurrentDictionary<int, bool> _completedEpisodesCache = new();
     private static readonly long SaveIntervalTicks = Stopwatch.Frequency * 5; // 5 seconds in ticks
     private readonly ILogger<WatchProgressService> _logger;
 
@@ -46,8 +47,16 @@ public class WatchProgressService : IWatchProgressService
             }
         }
 
+        // If user rewinds and starts watching again, clear completion cache
+        // This allows episode to be re-marked as complete if they watch it again
+        if (_completedEpisodesCache.ContainsKey(episodeId))
+        {
+            _completedEpisodesCache.TryRemove(episodeId, out _);
+            _logger.LogDebug("Cleared completion cache for episode {EpisodeId} (user rewound)", episodeId);
+        }
+
         _logger.LogDebug("Saving progress for episode {EpisodeId} at {Position}s", episodeId, positionSeconds);
-        
+
         using var conn = _db.CreateConnection();
         await conn.ExecuteAsync(Queries.UpsertWatchProgress, new
         {
@@ -63,8 +72,19 @@ public class WatchProgressService : IWatchProgressService
 
     public async Task MarkCompletedAsync(int episodeId)
     {
+        // Check cache first to prevent redundant DB writes
+        if (_completedEpisodesCache.ContainsKey(episodeId))
+        {
+            _logger.LogDebug("Episode {EpisodeId} already marked complete (cached), skipping DB write", episodeId);
+            return;
+        }
+
+        _logger.LogDebug("Marking episode {EpisodeId} as completed", episodeId);
         using var conn = _db.CreateConnection();
         await conn.ExecuteAsync(Queries.MarkEpisodeCompleted, new { episodeId });
+
+        // Add to cache and clear progress tracking
+        _completedEpisodesCache[episodeId] = true;
         _lastSaveTimes.TryRemove(episodeId, out _);
     }
 

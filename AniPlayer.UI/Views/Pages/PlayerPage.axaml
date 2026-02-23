@@ -54,13 +54,13 @@
                 Background="#1E1E2E"
                 BorderBrush="#2A2A3E"
                 BorderThickness="0,1,0,0"
-                Padding="20,12"
+                Padding="20,16"
                 PointerEntered="OnControlsBarPointerEntered"
                 PointerExited="OnControlsBarPointerExited">
             <Grid RowDefinitions="Auto,Auto,Auto">
 
                 <!-- Row 0: Progress Bar -->
-                <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,16">
+                <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,20">
                     <TextBlock x:Name="TimeCurrentText" Text="0:00"
                                Foreground="#B8B8D0" FontSize="12" FontWeight="Medium"
                                VerticalAlignment="Center" Margin="0,0,12,0"/>
@@ -74,7 +74,7 @@
                 </Grid>
 
                 <!-- Row 1: Transport Controls & Now Playing -->
-                <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,12">
+                <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,16">
                     <!-- Left: Transport Buttons -->
                     <StackPanel Orientation="Horizontal" Spacing="10">
                         <Button x:Name="PlayPauseButton" Content="▶ Play"
