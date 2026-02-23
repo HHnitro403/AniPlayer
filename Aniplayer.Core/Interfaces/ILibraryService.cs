@@ -16,8 +16,9 @@ public interface ILibraryService
     Task<IEnumerable<Series>> GetSeriesByLibraryIdAsync(int libraryId);
     Task<Series?> GetSeriesByIdAsync(int id);
     Task<Series?> GetSeriesByPathAsync(string path);
+    Task<IEnumerable<Series>> GetSeriesByGroupNameAsync(string seriesGroupName);
     Task<IEnumerable<Series>> GetRecentlyAddedSeriesAsync(int days);
-    Task<int> UpsertSeriesAsync(int libraryId, string folderName, string path);
+    Task<int> UpsertSeriesAsync(int libraryId, string folderName, string path, string seriesGroupName, int seasonNumber);
     Task UpdateSeriesMetadataAsync(Series series);
     Task DeleteSeriesAsync(int id);
 
@@ -33,4 +34,8 @@ public interface ILibraryService
     // Track Preferences
     Task<TrackPreferences?> GetSeriesTrackPreferenceAsync(int seriesId);
     Task UpsertSeriesAudioPreferenceAsync(int seriesId, string audioLanguage, string? audioTitle, int? audioTrackId = null);
+    Task UpsertSeriesSubtitlePreferenceAsync(int seriesId, string subtitleLanguage, string? subtitleName);
+
+    // External Subtitle Override
+    Task SetEpisodeExternalSubtitleAsync(int episodeId, string? subtitlePath);
 }

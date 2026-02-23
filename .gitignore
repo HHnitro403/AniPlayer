@@ -364,3 +364,4 @@ FodyWeavers.xsd
 
 # LibMpv native library (exceeds GitHub 100MB file limit)
 **/libmpv-2.dll
+/nul

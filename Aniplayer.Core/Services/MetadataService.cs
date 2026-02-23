@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -17,7 +18,7 @@ public class MetadataService : IMetadataService
 
     private const string SearchQuery = @"
         query ($search: String) {
-          Media(search: $search, type: ANIME) {
+          Media(search: $search, type: ANIME, isAdult: false, format_in: [TV, TV_SHORT, OVA, ONA, MOVIE, SPECIAL]) {
             id
             title { romaji english native }
             coverImage { large }
@@ -100,7 +101,7 @@ public class MetadataService : IMetadataService
         series.TitleRomaji = metadata.TitleRomaji;
         series.TitleEnglish = metadata.TitleEnglish;
         series.TitleNative = metadata.TitleNative;
-        series.Synopsis = metadata.Synopsis;
+        series.Synopsis = SanitizeSynopsis(metadata.Synopsis);
         series.Genres = metadata.GenresJson;
         series.AverageScore = metadata.AverageScore;
         series.TotalEpisodes = metadata.TotalEpisodes;
@@ -166,11 +167,43 @@ public class MetadataService : IMetadataService
         _logger.LogInformation("Batch metadata fetch complete");
     }
 
+    private static string? SanitizeSynopsis(string? rawSynopsis)
+    {
+        if (string.IsNullOrWhiteSpace(rawSynopsis))
+            return null;
+
+        var sanitized = rawSynopsis;
+
+        // Replace <br> with newlines
+        sanitized = Regex.Replace(sanitized, @"<br\s*/?>", Environment.NewLine, RegexOptions.IgnoreCase);
+
+        // Strip all other HTML tags
+        sanitized = Regex.Replace(sanitized, @"<[^>]+>", string.Empty);
+
+        // Strip AniList's markdown-like tags (e.g. [i], [/i])
+        sanitized = Regex.Replace(sanitized, @"\[/?\w+\]", string.Empty);
+
+        // Decode HTML entities (&quot;, &amp;, etc.)
+        sanitized = WebUtility.HtmlDecode(sanitized);
+
+        return sanitized.Trim();
+    }
+
     private static string CleanTitleForSearch(string title)
     {
+        // Strip leading [Group] tags (e.g. "[SubGroup] Title")
+        var cleaned = Regex.Replace(title, @"^\[.*?\]\s*", "");
+
         // Strip common suffixes that break AniList matching
-        var cleaned = Regex.Replace(title, @"\s+(?:Season|Part|Cour|S)\s*\d+$", "", RegexOptions.IgnoreCase);
+        cleaned = Regex.Replace(cleaned, @"\s+(?:Season|Part|Cour|S)\s*\d+$", "", RegexOptions.IgnoreCase);
         cleaned = Regex.Replace(cleaned, @"\s+\(.*?\)\s*$", ""); // "(Dub)", "(2024)"
+
+        // Strip trailing quality/resolution tags (e.g. "1080p", "BD", "BluRay")
+        cleaned = Regex.Replace(cleaned, @"\s+(?:\d{3,4}p|BD|BluRay|BDRip|WEB-?DL|WEBRip)\s*$", "", RegexOptions.IgnoreCase);
+
+        // Strip trailing separator + number patterns (e.g. "- 01", "- S01E01")
+        cleaned = Regex.Replace(cleaned, @"\s*[-–—]\s*(?:S\d+E\d+|\d+)\s*$", "", RegexOptions.IgnoreCase);
+
         return cleaned.Trim();
     }
 

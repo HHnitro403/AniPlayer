@@ -68,51 +68,77 @@ public class DatabaseInitializer
                 "ALTER TABLE TrackPreferences ADD COLUMN preferred_audio_track_id INTEGER;").ConfigureAwait(false);
         }
         catch (SqliteException) { /* column already exists — safe to ignore */ }
+
+        // Add series_group_name column
+        try
+        {
+            await connection.ExecuteAsync(
+                "ALTER TABLE Series ADD COLUMN series_group_name TEXT;").ConfigureAwait(false);
+        }
+        catch (SqliteException) { /* column already exists — safe to ignore */ }
+
+        // Add season_number column
+        try
+        {
+            await connection.ExecuteAsync(
+                "ALTER TABLE Series ADD COLUMN season_number INTEGER NOT NULL DEFAULT 1;").ConfigureAwait(false);
+        }
+        catch (SqliteException) { /* column already exists — safe to ignore */ }
+
+        // Add external_subtitle_path column (for manual subtitle file override)
+        try
+        {
+            await connection.ExecuteAsync(
+                "ALTER TABLE Episodes ADD COLUMN external_subtitle_path TEXT;").ConfigureAwait(false);
+        }
+        catch (SqliteException) { /* column already exists — safe to ignore */ }
     }
 
-    private static class Schema
-    {
-        public const string CreateLibraries = @"
-            CREATE TABLE IF NOT EXISTS Libraries (
-                id          INTEGER PRIMARY KEY AUTOINCREMENT,
-                path        TEXT NOT NULL UNIQUE,
-                label       TEXT,
-                created_at  TEXT NOT NULL DEFAULT (datetime('now'))
-            );";
-
-        public const string CreateSeries = @"
-            CREATE TABLE IF NOT EXISTS Series (
-                id                   INTEGER PRIMARY KEY AUTOINCREMENT,
-                library_id           INTEGER NOT NULL REFERENCES Libraries(id) ON DELETE CASCADE,
-                folder_name          TEXT NOT NULL,
-                path                 TEXT NOT NULL UNIQUE,
-                anilist_id           INTEGER,
-                title_romaji         TEXT,
-                title_english        TEXT,
-                title_native         TEXT,
-                cover_image_path     TEXT,
-                synopsis             TEXT,
-                genres               TEXT,
-                average_score        REAL,
-                total_episodes       INTEGER,
-                status               TEXT,
-                metadata_fetched_at  TEXT,
-                created_at           TEXT NOT NULL DEFAULT (datetime('now'))
-            );";
-
-        public const string CreateEpisodes = @"
-            CREATE TABLE IF NOT EXISTS Episodes (
-                id               INTEGER PRIMARY KEY AUTOINCREMENT,
-                series_id        INTEGER NOT NULL REFERENCES Series(id) ON DELETE CASCADE,
-                file_path        TEXT NOT NULL UNIQUE,
-                title            TEXT,
-                episode_number   REAL,
-                episode_type     TEXT NOT NULL DEFAULT 'EPISODE',
-                duration_seconds INTEGER,
-                thumbnail_path   TEXT,
-                anilist_ep_id    INTEGER,
-                created_at       TEXT NOT NULL DEFAULT (datetime('now'))
-            );";
+        private static class Schema
+        {
+            public const string CreateLibraries = @"
+                CREATE TABLE IF NOT EXISTS Libraries (
+                    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                    path        TEXT NOT NULL UNIQUE,
+                    label       TEXT,
+                    created_at  TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+                );";
+    
+            public const string CreateSeries = @"
+                CREATE TABLE IF NOT EXISTS Series (
+                    id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+                    library_id           INTEGER NOT NULL REFERENCES Libraries(id) ON DELETE CASCADE,
+                    folder_name          TEXT NOT NULL,
+                    path                 TEXT NOT NULL UNIQUE,
+                    series_group_name    TEXT,
+                    season_number        INTEGER NOT NULL DEFAULT 1,
+                    anilist_id           INTEGER,
+                    title_romaji         TEXT,
+                    title_english        TEXT,
+                    title_native         TEXT,
+                    cover_image_path     TEXT,
+                    synopsis             TEXT,
+                    genres               TEXT,
+                    average_score        REAL,
+                    total_episodes       INTEGER,
+                    status               TEXT,
+                    metadata_fetched_at  TEXT,
+                    created_at           TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+                );";
+    
+            public const string CreateEpisodes = @"
+                CREATE TABLE IF NOT EXISTS Episodes (
+                    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                    series_id        INTEGER NOT NULL REFERENCES Series(id) ON DELETE CASCADE,
+                    file_path        TEXT NOT NULL UNIQUE,
+                    title            TEXT,
+                    episode_number   REAL,
+                    episode_type     TEXT NOT NULL DEFAULT 'EPISODE',
+                    duration_seconds INTEGER,
+                    thumbnail_path   TEXT,
+                    anilist_ep_id    INTEGER,
+                    created_at       TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+                );";
 
         public const string CreateWatchProgress = @"
             CREATE TABLE IF NOT EXISTS WatchProgress (

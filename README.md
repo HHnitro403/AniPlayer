@@ -7,7 +7,7 @@ A cross-platform desktop anime media player built with C# and Avalonia UI. AniPl
 - **Library Management** — Add folders containing anime. AniPlayer auto-detects series, episodes, specials, OVAs, and more from your folder structure.
 - **Smart Episode Parsing** — Uses AnitomySharp to parse anime filenames (release groups, episode numbers, titles, resolution, etc.) with regex fallback.
 - **AniList Metadata** — Automatically fetches cover images, synopses, genres, scores, and episode counts from the AniList GraphQL API.
-- **mpv Video Playback** — Hardware-accelerated playback via libmpv with configurable cache, audio/subtitle track selection, and playback speed controls.
+- **mpv Video Playback** — Hardware-accelerated playback via libmpv with audio/subtitle track selection, volume control, and keyboard shortcuts.
 - **Watch Progress Tracking** — Automatically saves playback position every 5 seconds and resumes where you left off. Marks episodes as completed at 90%.
 - **File Watching** — Monitors library folders for new/renamed/deleted files and re-scans automatically with a debounce pattern.
 - **Cross-Platform** — Targets .NET 9 and Avalonia UI 11, runs on Windows, Linux, and macOS.
@@ -102,6 +102,25 @@ Logging is controlled by **regions** to avoid flooding the log with verbose outp
 | `DB` | Per-row database dumps in RefreshPages |
 
 Enable verbose regions in code: `Logger.EnabledRegions = LogRegion.All;`
+
+## Keyboard Shortcuts
+
+AniPlayer supports the following keyboard shortcuts when the player page is active:
+
+| Key | Action |
+|-----|--------|
+| **Space** | Play / Pause |
+| **Left Arrow** | Seek backward 5 seconds |
+| **Right Arrow** | Seek forward 5 seconds |
+| **Up Arrow** | Increase volume (+10) |
+| **Down Arrow** | Decrease volume (-5) |
+| **A** | Cycle audio track |
+| **S** | Cycle subtitle track |
+| **M** | Mute / Unmute |
+| **N** | Next episode in playlist |
+| **F** | Toggle fullscreen |
+| **F11** | Toggle fullscreen (alternative) |
+| **Escape** | Exit fullscreen |
 
 ## Building
 

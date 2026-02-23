@@ -81,6 +81,52 @@
                 <TextBlock Text="Built with Avalonia + libmpv"
                            FontSize="12" Opacity="0.4"/>
             </StackPanel>
+            
+            <Separator/>
+
+            <!-- Developer -->
+            <StackPanel Spacing="8">
+                <TextBlock Text="Developer" FontSize="16" FontWeight="SemiBold"/>
+                
+                <Grid ColumnDefinitions="*,Auto" Margin="0,4">
+                    <StackPanel>
+                        <TextBlock Text="Enable Verbose Logging"
+                                   VerticalAlignment="Center" FontWeight="SemiBold"/>
+                        <TextBlock Text="Enable to see detailed logs. This can impact performance."
+                                   FontSize="12" Opacity="0.5"/>
+                    </StackPanel>
+                    <ToggleSwitch x:Name="MasterLogToggle" Grid.Column="1"/>
+                </Grid>
+
+                <StackPanel Margin="16,8,0,0" Spacing="8" IsEnabled="{Binding #MasterLogToggle.IsChecked}">
+                    <TextBlock Text="Log Regions" FontSize="14" FontWeight="SemiBold" Opacity="0.8"/>
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Text="Scanner Logging"
+                                   VerticalAlignment="Center"/>
+                        <ToggleSwitch x:Name="ScannerLogToggle" Grid.Column="1"/>
+                    </Grid>
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Text="Parser Logging"
+                                   VerticalAlignment="Center"/>
+                        <ToggleSwitch x:Name="ParserLogToggle" Grid.Column="1"/>
+                    </Grid>
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Text="UI Logging"
+                                   VerticalAlignment="Center"/>
+                        <ToggleSwitch x:Name="UiLogToggle" Grid.Column="1"/>
+                    </Grid>
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Text="Database Logging"
+                                   VerticalAlignment="Center"/>
+                        <ToggleSwitch x:Name="DbLogToggle" Grid.Column="1"/>
+                    </Grid>
+                    <Grid ColumnDefinitions="*,Auto" Margin="0,4,0,0">
+                        <TextBlock Text="Progress Logging"
+                                   VerticalAlignment="Center"/>
+                        <ToggleSwitch x:Name="ProgressLogToggle" Grid.Column="1"/>
+                    </Grid>
+                </StackPanel>
+            </StackPanel>
 
         </StackPanel>
     </ScrollViewer>

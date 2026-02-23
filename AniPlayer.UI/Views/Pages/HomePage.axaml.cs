@@ -10,7 +10,9 @@ using Aniplayer.Core.Models;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Globalization;
 using System.Linq;
+using Aniplayer.Core.Constants;
 
 namespace AniPlayer.UI;
 
@@ -174,28 +176,24 @@ public partial class HomePage : UserControl
             });
         }
 
-        // Timestamp badge (top-right) — e.g. "12:34 left"
-        var remaining = (progress.DurationSeconds ?? 0) - progress.PositionSeconds;
-        if (remaining > 0)
+        // Timestamp badge (top-right) — e.g. "12:34"
+        var ts = TimeSpan.FromSeconds(progress.PositionSeconds);
+        var timeText = ts.Hours > 0 ? ts.ToString(@"h\:mm\:ss") : ts.ToString(@"m\:ss");
+        coverPanel.Children.Add(new Border
         {
-            var ts = TimeSpan.FromSeconds(remaining);
-            var timeText = ts.Hours > 0 ? ts.ToString(@"h\:mm\:ss") : ts.ToString(@"m\:ss");
-            coverPanel.Children.Add(new Border
+            Background = new SolidColorBrush(Color.FromArgb(200, 0, 0, 0)),
+            CornerRadius = new CornerRadius(4),
+            Padding = new Thickness(5, 2),
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Top,
+            Margin = new Thickness(0, 6, 6, 0),
+            Child = new TextBlock
             {
-                Background = new SolidColorBrush(Color.FromArgb(200, 0, 0, 0)),
-                CornerRadius = new CornerRadius(4),
-                Padding = new Thickness(5, 2),
-                HorizontalAlignment = HorizontalAlignment.Right,
-                VerticalAlignment = VerticalAlignment.Top,
-                Margin = new Thickness(0, 6, 6, 0),
-                Child = new TextBlock
-                {
-                    Text = $"{timeText} left",
-                    FontSize = 10,
-                    Foreground = Brushes.White,
-                },
-            });
-        }
+                Text = timeText,
+                FontSize = 10,
+                Foreground = Brushes.White,
+            },
+        });
 
         // Progress bar at bottom of cover (proportional grid)
         var progressPercent = progress.ProgressPercent;
@@ -203,7 +201,8 @@ public partial class HomePage : UserControl
         {
             Height = 3,
             VerticalAlignment = VerticalAlignment.Bottom,
-            ColumnDefinitions = new ColumnDefinitions($"{progressPercent:F4}*,{(1 - progressPercent):F4}*"),
+            ColumnDefinitions = new ColumnDefinitions(
+                string.Format(CultureInfo.InvariantCulture, "{0:F4}*,{1:F4}*", progressPercent, 1 - progressPercent)),
         };
         var fillBar = new Border
         {

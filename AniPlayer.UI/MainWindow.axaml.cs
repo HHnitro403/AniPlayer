@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
 using System.Threading.Tasks;
+using Aniplayer.Core.Constants;
 
 namespace AniPlayer.UI
 {
@@ -18,28 +19,25 @@ namespace AniPlayer.UI
         private readonly PlayerPage _playerPage;
         private readonly ShowInfoPage _showInfoPage;
         private readonly OptionsPage _optionsPage;
-
-        // Services resolved from DI
+        
         private readonly ILibraryService _libraryService;
         private readonly IScannerService _scannerService;
         private readonly IFolderWatcherService _folderWatcher;
         private readonly IWatchProgressService _watchProgressService;
-
-        private List<Episode> _currentEpisodes = new();
+        
+        private IReadOnlyList<Episode> _currentPlaylist = new List<Episode>();
         private bool _isFullscreen;
 
         public MainWindow()
         {
             Logger.Log("MainWindow constructor called");
             InitializeComponent();
-
-            // Resolve services from DI container
+            
             _libraryService       = App.Services.GetRequiredService<ILibraryService>();
             _scannerService       = App.Services.GetRequiredService<IScannerService>();
             _folderWatcher        = App.Services.GetRequiredService<IFolderWatcherService>();
             _watchProgressService = App.Services.GetRequiredService<IWatchProgressService>();
-
-            // Create pages once — PlayerPage holds the mpv instance for its lifetime
+            
             _homePage = new HomePage();
             _libraryPage = new LibraryPage();
             _playerPage = new PlayerPage();
@@ -48,22 +46,18 @@ namespace AniPlayer.UI
 
             WireEvents();
             NavigateTo("Home");
-
-            // Load initial data and start watchers
+            
             _ = InitializeAsync();
 
             Closing += MainWindow_Closing;
             KeyDown += OnMainWindowKeyDown;
             Logger.Log("MainWindow constructor completed");
         }
-
-        // ── Navigation ───────────────────────────────────────────
-
+        
         private void NavigateTo(string page)
         {
             Logger.Log($"NavigateTo: {page}");
 
-            // Pause playback when navigating away from the player
             if (page != "Player" && PageHost.Content == _playerPage)
                 _playerPage.PausePlayback();
 
@@ -79,119 +73,78 @@ namespace AniPlayer.UI
 
             SidebarControl.SetActive(page);
         }
-
-        public async void PlayFile(string filePath)
-        {
-            NavigateTo("Player");
-
-            // Pass full episode playlist so auto-next works
-            var files = _currentEpisodes.Select(e => e.FilePath).ToArray();
-            var episodeIds = _currentEpisodes.Select(e => e.Id).ToArray();
-            var index = Array.IndexOf(files, filePath);
-            if (index >= 0)
-                _playerPage.SetPlaylist(files, index, episodeIds);
-
-            // Pass series context so the player can read/save audio track preferences
-            var episode = _currentEpisodes.FirstOrDefault(e => e.FilePath == filePath);
-            if (episode != null)
-            {
-                _playerPage.SetSeriesContext(episode.SeriesId, _libraryService);
-                _playerPage.SetEpisodeContext(episode.Id);
-            }
-
-            await _playerPage.LoadFileAsync(filePath);
-        }
-
-        // ── Event wiring ─────────────────────────────────────────
-
+        
         private void WireEvents()
         {
-            // Sidebar
             SidebarControl.HomeClicked    += () => NavigateTo("Home");
             SidebarControl.LibraryClicked += () => NavigateTo("Library");
             SidebarControl.PlayerClicked  += () => NavigateTo("Player");
             SidebarControl.SettingsClicked += () => NavigateTo("Settings");
-
-            // HomePage
-            _homePage.PlayFileRequested   += PlayFile;
+            
             _homePage.AddLibraryRequested += () => NavigateTo("Settings");
-            _homePage.SeriesSelected += id =>
+            _homePage.SeriesSelected += seriesId =>
             {
-                Logger.Log($"[MainWindow] HomePage.SeriesSelected: ID={id}");
-                _ = OpenSeriesAsync(id);
+                _ = OpenSeriesAsync(seriesId);
             };
             _homePage.ResumeEpisodeRequested += id =>
             {
-                Logger.Log($"[MainWindow] ResumeEpisodeRequested: episode ID={id}");
                 _ = ResumeEpisodeAsync(id);
             };
-
-            // LibraryPage
-            _libraryPage.SeriesSelected += id =>
+            
+            _libraryPage.SeriesSelected += groupName =>
             {
-                Logger.Log($"[MainWindow] SeriesSelected: ID={id}");
-                _ = OpenSeriesAsync(id);
+                _ = OpenSeriesAsync(groupName);
             };
             _libraryPage.FolderAdded += path =>
             {
-                Logger.Log($"[MainWindow] LibraryPage.FolderAdded event received: {path}");
                 _ = AddLibraryAsync(path, "LibraryPage");
             };
-
-            // ShowInfoPage
+            
             _showInfoPage.BackRequested += () => NavigateTo("Library");
             _showInfoPage.EpisodePlayRequested += filePath =>
             {
-                Logger.Log($"[MainWindow] EpisodePlayRequested: {filePath}");
-                PlayFile(filePath);
+                var index = _currentPlaylist.ToList().FindIndex(e => e.FilePath == filePath);
+                if (index >= 0)
+                {
+                    NavigateTo("Player");
+                    _ = _playerPage.LoadPlaylistAsync(_currentPlaylist, index);
+                }
             };
-
-            // PlayerPage
+            _showInfoPage.MetadataRefreshRequested += () =>
+            {
+                _ = RefreshPagesAsync();
+            };
+            
             _playerPage.PlaybackStopped += () =>
             {
                 if (_isFullscreen) ToggleFullscreen();
                 NavigateTo("Home");
             };
             _playerPage.FullscreenToggleRequested += ToggleFullscreen;
-
-            // OptionsPage
+            
             _optionsPage.LibraryFolderAdded += path =>
             {
-                Logger.Log($"[MainWindow] OptionsPage.LibraryFolderAdded event received: {path}");
                 _ = AddLibraryAsync(path, "OptionsPage");
             };
             _optionsPage.LibraryRemoveRequested += id =>
             {
-                Logger.Log($"[MainWindow] OptionsPage.LibraryRemoveRequested: ID {id}");
                 _ = RemoveLibraryAsync(id);
             };
-
-            // ScannerService — pipe scan progress into debug.log (Scanner region)
+            
             _scannerService.ScanProgress += msg => Logger.Log($"[Scanner] {msg}", LogRegion.Scanner);
-
-            // FolderWatcher — re-scan when files change on disk
+            
             _folderWatcher.LibraryChanged += libraryId =>
             {
-                Logger.Log($"[FolderWatcher] Library {libraryId} changed on disk, triggering re-scan");
                 _ = RescanLibraryAsync(libraryId);
             };
         }
-
-        // ── Add Library (shared by LibraryPage + OptionsPage) ────
-
+        
         private async Task AddLibraryAsync(string path, string source)
         {
-            Logger.Log($"[AddLibrary] === START (source: {source}) ===");
-            Logger.Log($"[AddLibrary] Raw path: {path}");
-
-            // Normalize: trim trailing directory separators so Path.GetFileName works
+            Logger.Log($"[AddLibrary] START (source: {source})");
             path = path.TrimEnd(System.IO.Path.DirectorySeparatorChar, System.IO.Path.AltDirectorySeparatorChar);
-            Logger.Log($"[AddLibrary] Normalized path: {path}");
-
-            // Validate path
-            var exists = System.IO.Directory.Exists(path);
-            Logger.Log($"[AddLibrary] Directory exists: {exists}");
-            if (!exists)
+            
+            if (!System.IO.Directory.Exists(path))
             {
                 Logger.Log($"[AddLibrary] ERROR: Directory does not exist, aborting");
                 return;
@@ -199,196 +152,135 @@ namespace AniPlayer.UI
 
             try
             {
-                // Check if this library path is already registered (try with and without trailing slash)
                 var existing = await _libraryService.GetLibraryByPathAsync(path)
                     ?? await _libraryService.GetLibraryByPathAsync(path + System.IO.Path.DirectorySeparatorChar);
                 if (existing != null)
                 {
-                    Logger.Log($"[AddLibrary] Library already exists (ID: {existing.Id}), re-scanning instead of inserting");
                     await _scannerService.ScanLibraryAsync(existing.Id);
-                    Logger.Log($"[AddLibrary] === RE-SCAN COMPLETE (library {existing.Id}) ===");
                     await RefreshPagesAsync();
                     return;
                 }
-
-                // Step 1: Insert into database
+                
                 var label = System.IO.Path.GetFileName(path);
-                Logger.Log($"[AddLibrary] Step 1: Inserting into DB — path='{path}', label='{label}'");
                 var libraryId = await _libraryService.AddLibraryAsync(path, label);
-                Logger.Log($"[AddLibrary] Step 1 DONE: Library inserted with ID {libraryId}");
-
-                // Step 2: Scan for series + episodes
-                Logger.Log($"[AddLibrary] Step 2: Scanning library {libraryId} for series and episodes...");
                 await _scannerService.ScanLibraryAsync(libraryId);
-                Logger.Log($"[AddLibrary] Step 2 DONE: Scan complete for library {libraryId}");
-
-                // Step 3: Start folder watcher
-                Logger.Log($"[AddLibrary] Step 3: Starting folder watcher for library {libraryId}");
                 _folderWatcher.WatchLibrary(libraryId, path);
-                Logger.Log($"[AddLibrary] Step 3 DONE: Now watching library {libraryId}");
-
-                // Step 4: Refresh all pages to show new data
                 await RefreshPagesAsync();
-
-                Logger.Log($"[AddLibrary] === SUCCESS (library {libraryId}) ===");
             }
-            catch (Exception ex)
-            {
-                Logger.Log($"[AddLibrary] === FAILED ===");
-                Logger.Log($"[AddLibrary] Exception type: {ex.GetType().Name}");
-                Logger.Log($"[AddLibrary] Message: {ex.Message}");
-                Logger.Log($"[AddLibrary] StackTrace: {ex.StackTrace}");
-                if (ex.InnerException != null)
-                    Logger.Log($"[AddLibrary] InnerException: {ex.InnerException.Message}");
-            }
+            catch (Exception ex) { Logger.Log($"[AddLibrary] FAILED: {ex.Message}"); }
         }
 
         private async Task RemoveLibraryAsync(int libraryId)
         {
             try
             {
-                Logger.Log($"[RemoveLibrary] Removing library {libraryId}");
                 _folderWatcher.StopWatching(libraryId);
                 await _libraryService.DeleteLibraryAsync(libraryId);
-                Logger.Log($"[RemoveLibrary] Library {libraryId} deleted");
                 await RefreshPagesAsync();
             }
-            catch (Exception ex)
+            catch (Exception ex) { Logger.Log($"[RemoveLibrary] Failed: {ex.Message}"); }
+        }
+
+        private async Task OpenSeriesAsync(string seriesGroupName)
+        {
+            try
             {
-                Logger.Log($"[RemoveLibrary] Failed: {ex.Message}");
+                var seriesGroup = (await _libraryService.GetSeriesByGroupNameAsync(seriesGroupName)).ToList();
+                if (seriesGroup.Count == 0) return;
+
+                var allEpisodes = new List<Episode>();
+                foreach (var series in seriesGroup.OrderBy(s => s.SeasonNumber))
+                {
+                    var episodes = (await _libraryService.GetEpisodesBySeriesIdAsync(series.Id)).ToList();
+                    allEpisodes.AddRange(episodes.OrderBy(e => e.EpisodeNumber));
+                }
+                _currentPlaylist = allEpisodes;
+
+                _showInfoPage.LoadSeriesData(seriesGroup, allEpisodes);
+                NavigateTo("ShowInfo");
             }
+            catch (Exception ex) { Logger.Log($"[OpenSeries] Failed: {ex.Message}"); }
         }
 
         private async Task OpenSeriesAsync(int seriesId)
         {
             try
             {
-                Logger.Log($"[OpenSeries] Loading series {seriesId}...");
                 var series = await _libraryService.GetSeriesByIdAsync(seriesId);
-                if (series == null)
+                if (series?.SeriesGroupName != null)
                 {
-                    Logger.Log($"[OpenSeries] ERROR: Series {seriesId} not found in DB");
-                    return;
+                    await OpenSeriesAsync(series.SeriesGroupName);
                 }
-
-                var episodes = (await _libraryService.GetEpisodesBySeriesIdAsync(seriesId)).ToList();
-                _currentEpisodes = episodes;
-                Logger.Log($"[OpenSeries] Loaded series '{series.DisplayTitle}' with {episodes.Count} episode(s)");
-
-                _showInfoPage.LoadSeriesData(series, episodes);
-                NavigateTo("ShowInfo");
             }
-            catch (Exception ex)
-            {
-                Logger.Log($"[OpenSeries] Failed: {ex.Message}");
-            }
+            catch (Exception ex) { Logger.Log($"[OpenSeries] Failed to open single series {seriesId}: {ex.Message}"); }
         }
 
         private async Task ResumeEpisodeAsync(int episodeId)
         {
             try
             {
-                // Look up the episode, load its series episodes for playlist, then play
-                var allSeries = await _libraryService.GetAllSeriesAsync();
-                Episode? target = null;
-                foreach (var s in allSeries)
-                {
-                    var eps = (await _libraryService.GetEpisodesBySeriesIdAsync(s.Id)).ToList();
-                    target = eps.FirstOrDefault(e => e.Id == episodeId);
-                    if (target != null)
-                    {
-                        _currentEpisodes = eps;
-                        Logger.Log($"[ResumeEpisode] Found episode {episodeId} in series '{s.DisplayTitle}', {eps.Count} episodes");
-                        break;
-                    }
-                }
+                var episode = await _libraryService.GetEpisodeByIdAsync(episodeId);
+                if (episode == null) return;
+                
+                var series = await _libraryService.GetSeriesByIdAsync(episode.SeriesId);
+                if (series?.SeriesGroupName == null) return;
 
-                if (target == null)
+                var seriesGroup = await _libraryService.GetSeriesByGroupNameAsync(series.SeriesGroupName);
+                var allEpisodes = new List<Episode>();
+                foreach (var s in seriesGroup.OrderBy(s => s.SeasonNumber))
                 {
-                    Logger.Log($"[ResumeEpisode] Episode {episodeId} not found");
-                    return;
+                    var episodes = (await _libraryService.GetEpisodesBySeriesIdAsync(s.Id)).ToList();
+                    allEpisodes.AddRange(episodes.OrderBy(e => e.EpisodeNumber));
                 }
-
-                PlayFile(target.FilePath);
+                
+                var index = allEpisodes.FindIndex(e => e.Id == episodeId);
+                if (index >= 0)
+                {
+                    _currentPlaylist = allEpisodes;
+                    NavigateTo("Player");
+                    await _playerPage.LoadPlaylistAsync(_currentPlaylist, index);
+                }
             }
-            catch (Exception ex)
-            {
-                Logger.Log($"[ResumeEpisode] Failed: {ex.Message}");
-            }
+            catch (Exception ex) { Logger.Log($"[ResumeEpisode] Failed: {ex.Message}"); }
         }
-
-        // ── Data refresh ────────────────────────────────────────
-
+        
         private async Task RefreshPagesAsync()
         {
             try
             {
-                Logger.Log("[RefreshPages] === START ===");
-
                 var libraries = (await _libraryService.GetAllLibrariesAsync()).ToList();
-                Logger.Log($"[RefreshPages] DB returned {libraries.Count} libraries");
-                foreach (var lib in libraries)
-                    Logger.Log($"[RefreshPages]   Library ID={lib.Id}, path='{lib.Path}', label='{lib.Label}'", LogRegion.DB);
-
                 var allSeries = (await _libraryService.GetAllSeriesAsync()).ToList();
-                Logger.Log($"[RefreshPages] DB returned {allSeries.Count} series");
-                foreach (var s in allSeries)
-                    Logger.Log($"[RefreshPages]   Series ID={s.Id}, libId={s.LibraryId}, folder='{s.FolderName}', display='{s.DisplayTitle}'", LogRegion.DB);
-
-                // Log episode counts per series (DB region — verbose)
-                foreach (var s in allSeries)
-                {
-                    var episodes = (await _libraryService.GetEpisodesBySeriesIdAsync(s.Id)).ToList();
-                    Logger.Log($"[RefreshPages]   Series '{s.FolderName}' (ID={s.Id}) has {episodes.Count} episodes", LogRegion.DB);
-                    foreach (var ep in episodes)
-                        Logger.Log($"[RefreshPages]     Episode ID={ep.Id}, ep#={ep.EpisodeNumber?.ToString() ?? "null"}, file='{ep.FilePath}'", LogRegion.DB);
-                }
-
-                // Recently added series (last 14 days)
-                var recentSeries = (await _libraryService.GetRecentlyAddedSeriesAsync(14)).ToList();
-                Logger.Log($"[RefreshPages] Recently added (14 days): {recentSeries.Count} series");
-
-                // Fetch continue-watching data
+                // Group recently added series by SeriesGroupName so each anime appears once
+                var recentSeries = allSeries
+                    .Where(s => s.CreatedAt != null && DateTime.Parse(s.CreatedAt) >= DateTime.Now.AddDays(-14))
+                    .GroupBy(s => s.SeriesGroupName, StringComparer.OrdinalIgnoreCase)
+                    .Select(g => g.OrderByDescending(s => s.CoverImagePath != null).First())
+                    .ToList();
+                
                 var recentlyWatched = (await _watchProgressService.GetRecentlyWatchedAsync(10)).ToList();
-                Logger.Log($"[RefreshPages] Recently watched: {recentlyWatched.Count} episodes");
-
-                // Build series lookup for cover images
+                
                 var seriesLookup = allSeries.ToDictionary(s => s.Id);
                 var continueItems = recentlyWatched.Select(rw =>
                 {
                     seriesLookup.TryGetValue(rw.Episode.SeriesId, out var series);
                     return (rw.Episode, rw.Progress, Series: series);
                 }).ToList();
-
-                // Push data to pages
+                
                 _optionsPage.DisplayLibraries(libraries);
                 _libraryPage.DisplaySeries(allSeries);
                 _homePage.DisplayContinueWatching(continueItems);
                 _homePage.DisplayRecentlyAdded(recentSeries);
                 _homePage.SetHasLibraries(libraries.Count > 0);
-
-                Logger.Log("[RefreshPages] === DONE ===");
             }
-            catch (Exception ex)
-            {
-                Logger.Log($"[RefreshPages] === FAILED ===");
-                Logger.Log($"[RefreshPages] Exception: {ex.GetType().Name}: {ex.Message}");
-                Logger.Log($"[RefreshPages] StackTrace: {ex.StackTrace}");
-            }
+            catch (Exception ex) { Logger.Log($"[RefreshPages] FAILED: {ex.Message}"); }
         }
-
-        // ── Startup helpers ──────────────────────────────────────
-
+        
         private async Task InitializeAsync()
         {
             await StartFolderWatchersAsync();
-
-            // Scan all libraries on startup to pick up any that were never
-            // successfully scanned (e.g. previous crash) or have new files
             Logger.Log("[Startup] Scanning all libraries...");
             await _scannerService.ScanAllLibrariesAsync();
             Logger.Log("[Startup] Startup scan complete");
-
             await RefreshPagesAsync();
         }
 
@@ -401,12 +293,8 @@ namespace AniPlayer.UI
                 {
                     _folderWatcher.WatchLibrary(lib.Id, lib.Path);
                 }
-                Logger.Log("Folder watchers started for all libraries");
             }
-            catch (Exception ex)
-            {
-                Logger.Log($"Failed to start folder watchers: {ex.Message}");
-            }
+            catch (Exception ex) { Logger.Log($"Failed to start folder watchers: {ex.Message}"); }
         }
 
         private async Task RescanLibraryAsync(int libraryId)
@@ -414,22 +302,12 @@ namespace AniPlayer.UI
             await _scannerService.ScanLibraryAsync(libraryId);
             await RefreshPagesAsync();
         }
-
-        // ── Fullscreen ───────────────────────────────────────────
-
+        
         private void ToggleFullscreen()
         {
             _isFullscreen = !_isFullscreen;
-            if (_isFullscreen)
-            {
-                WindowState = WindowState.FullScreen;
-                SidebarControl.IsVisible = false;
-            }
-            else
-            {
-                WindowState = WindowState.Normal;
-                SidebarControl.IsVisible = true;
-            }
+            WindowState = _isFullscreen ? WindowState.FullScreen : WindowState.Normal;
+            SidebarControl.IsVisible = !_isFullscreen;
             _playerPage.SetFullscreen(_isFullscreen);
             Logger.Log($"Fullscreen: {_isFullscreen}");
         }
@@ -451,9 +329,7 @@ namespace AniPlayer.UI
                 e.Handled = true;
             }
         }
-
-        // ── Shutdown ─────────────────────────────────────────────
-
+        
         private async void MainWindow_Closing(object? sender, CancelEventArgs e)
         {
             Logger.Log("MainWindow closing — shutting down");

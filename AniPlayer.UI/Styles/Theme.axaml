@@ -1,4 +1,10 @@
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-
+    <Style>
+        <Style.Resources>
+            <StreamGeometry x:Key="fast_forward_regular">
+                M11.72,12,5.36,6.38A.75.75,0,0,1,6.42,5.32l6.88,6.12a.75.75,0,0,1,0,1.12L6.42,18.68A.75.75,0,0,1,5.36,17.62Z M18.64,5.32a.75.75,0,0,0-1.06,1.06L18.94,12l-1.36,1.62a.75.75,0,0,0,1.06,1.06l2.12-2.37a.75.75,0,0,0,0-1.12Z
+            </StreamGeometry>
+        </Style.Resources>
+    </Style>
 </Styles>

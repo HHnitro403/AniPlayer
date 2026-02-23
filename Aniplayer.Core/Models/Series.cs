@@ -8,6 +8,8 @@ public class Series
     public int LibraryId { get; set; }
     public string FolderName { get; set; } = string.Empty;
     public string Path { get; set; } = string.Empty;
+    public string SeriesGroupName { get; set; } = string.Empty;
+    public int SeasonNumber { get; set; }
     public int? AnilistId { get; set; }
     public string? TitleRomaji { get; set; }
     public string? TitleEnglish { get; set; }
@@ -25,7 +27,8 @@ public class Series
     public List<Episode>? Episodes { get; set; }
 
     public string DisplayTitle =>
-        TitleEnglish ?? TitleRomaji ?? CleanFolderName(FolderName);
+        TitleEnglish ?? TitleRomaji ?? CleanFolderName(
+            !string.IsNullOrEmpty(SeriesGroupName) ? SeriesGroupName : FolderName);
 
     /// <summary>
     /// Strips release group tags [Group], trailing bracket tags [quality][hash],
@@ -33,7 +36,7 @@ public class Series
     /// "[Judas] High School DxD (Seasons 1-4 + OVAs + Specials)" → "High School DxD"
     /// "[Anime Time] Kenja no Mago (Wise Man's Grandchild) [Dual Audio]" → "Kenja no Mago (Wise Man's Grandchild)"
     /// </summary>
-    private static string CleanFolderName(string name)
+    internal static string CleanFolderName(string name)
     {
         if (string.IsNullOrWhiteSpace(name))
             return name;

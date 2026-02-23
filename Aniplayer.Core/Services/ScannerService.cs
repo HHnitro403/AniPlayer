@@ -73,16 +73,81 @@ public class ScannerService : IScannerService
         foreach (var seriesDir in topDirs)
         {
             ct.ThrowIfCancellationRequested();
-            var folderName = Path.GetFileName(seriesDir);
 
-            if (EpisodeTypes.IsKnownSubfolder(folderName))
+            var dirInfo = new DirectoryInfo(seriesDir);
+            if (EpisodeTypes.IsKnownSubfolder(dirInfo.Name))
             {
-                Report($"Skipping known subfolder at library root: {folderName}");
+                Report($"Skipping known subfolder at library root: {dirInfo.Name}");
                 continue;
             }
 
             seriesCount++;
-            await ScanSeriesDirectoryAsync(libraryId, seriesDir, folderName, ct);
+
+            // ── Categorize subfolders into three distinct groups ──
+            var subDirs = dirInfo.GetDirectories();
+
+            // 1. Standard season folders: "Season 1", "S02", "Book 3" (but NOT "Specials"/"OVA")
+            var seasonFolders = subDirs
+                .Where(d => EpisodeParser.TryParseSeasonFromFolder(d.Name, out _)
+                            && !EpisodeTypes.IsKnownSubfolder(d.Name))
+                .ToList();
+
+            // 2. Known special-type folders: "Specials", "OVA", "OVAs", "Extras", "NCOP", "NCED"
+            var specialFolders = subDirs
+                .Where(d => EpisodeTypes.IsKnownSubfolder(d.Name)
+                            && FileHelper.ContainsVideoFiles(d.FullName))
+                .ToList();
+
+            // 3. Non-standard content folders: "BorN", "New", "Hero" — have videos, no recognized pattern
+            var contentFolders = subDirs
+                .Where(d => !EpisodeParser.TryParseSeasonFromFolder(d.Name, out _)
+                            && !EpisodeTypes.IsKnownSubfolder(d.Name)
+                            && FileHelper.ContainsVideoFiles(d.FullName))
+                .ToList();
+
+            var hasRootVideos = FileHelper.ContainsVideoFiles(dirInfo.FullName);
+
+            if (seasonFolders.Count > 0)
+            {
+                // ── Multi-season (standard): "Show" -> "Season 1", "Season 2" ──
+                Report($"Scanning multi-season series (standard): {dirInfo.Name}");
+                foreach (var seasonDir in seasonFolders)
+                    await ScanSeasonAsync(libraryId, dirInfo.Name, seasonDir.FullName, ct);
+
+                // Non-standard content folders alongside seasons (e.g. "Movies" next to "Season 1")
+                foreach (var extraDir in contentFolders)
+                {
+                    Report($"  Also scanning non-standard subfolder: {extraDir.Name}");
+                    await ScanSeasonAsync(libraryId, dirInfo.Name, extraDir.FullName, ct);
+                }
+
+                // Top-level special folders (OVA, Specials alongside Season folders)
+                foreach (var specialDir in specialFolders)
+                    await ScanSeasonAsync(libraryId, dirInfo.Name, specialDir.FullName, ct);
+
+                // Root videos alongside seasons (rare but valid — e.g. a movie file next to Season folders)
+                if (hasRootVideos)
+                    await ScanSeasonAsync(libraryId, dirInfo.Name, dirInfo.FullName, ct);
+            }
+            else if (contentFolders.Count > 0 && !hasRootVideos)
+            {
+                // ── Non-standard multi-season: "High School DxD" -> "New", "BorN", "Hero" ──
+                Report($"Scanning multi-season series (non-standard names): {dirInfo.Name}");
+                var seasonCounter = 1;
+                foreach (var seasonDir in contentFolders.OrderBy(d => d.Name))
+                    await ScanSeasonAsync(libraryId, dirInfo.Name, seasonDir.FullName, ct, fallbackSeasonNumber: seasonCounter++);
+
+                // Special folders alongside non-standard seasons
+                foreach (var specialDir in specialFolders)
+                    await ScanSeasonAsync(libraryId, dirInfo.Name, specialDir.FullName, ct);
+            }
+            else
+            {
+                // ── Single-season: video files at root, specials in subfolders ──
+                Report($"Scanning single-season series: {dirInfo.Name}");
+                await ScanSeasonAsync(libraryId, dirInfo.Name, dirInfo.FullName, ct);
+                // ScanSeasonAsync internally handles special subfolders within the season folder
+            }
         }
 
         Report($"Scanned {seriesCount} series folders");
@@ -96,35 +161,54 @@ public class ScannerService : IScannerService
         Report($"Scan complete for library {lib.Id}");
     }
 
-    private async Task ScanSeriesDirectoryAsync(int libraryId, string seriesDir,
-        string folderName, CancellationToken ct)
+    private async Task ScanSeasonAsync(int libraryId, string seriesGroupName, string seasonPath, CancellationToken ct, int? fallbackSeasonNumber = null)
     {
-        Report($"Scanning series: {folderName} ({seriesDir})");
+        var seasonDirInfo = new DirectoryInfo(seasonPath);
+        var seasonFolderName = seasonDirInfo.Name;
 
-        var seriesId = await _library.UpsertSeriesAsync(libraryId, folderName, seriesDir);
-        Report($"  Series upserted — ID: {seriesId}, folder: {folderName}");
+        var seasonNumber = 1;
+        if (!EpisodeParser.TryParseSeasonFromFolder(seasonFolderName, out seasonNumber) && fallbackSeasonNumber.HasValue)
+        {
+            seasonNumber = fallbackSeasonNumber.Value;
+            Report($"  Using fallback season number {seasonNumber} for '{seasonFolderName}'");
+        }
 
-        // Scan video files directly in the series folder (regular episodes)
-        var epCount = await ScanEpisodesInFolderAsync(seriesId, seriesDir, EpisodeTypes.Episode, ct);
-        Report($"  Found {epCount} episode(s) in root folder");
+        Report($"  Scanning season: group='{seriesGroupName}', folder='{seasonFolderName}', season={seasonNumber}");
 
-        // Scan known subfolders (Specials, OVA, etc.)
-        var subDirs = Directory.GetDirectories(seriesDir);
-        if (subDirs.Length > 0)
-            Report($"  Found {subDirs.Length} subfolder(s) in series");
+        var seriesId = await _library.UpsertSeriesAsync(libraryId, seasonFolderName, seasonPath, seriesGroupName, seasonNumber);
+        Report($"    Series upserted — ID: {seriesId}, group: '{seriesGroupName}', folder: '{seasonFolderName}'");
 
-        foreach (var subDir in subDirs)
+        // Determine the default episode type from the folder name
+        // "Specials" → SPECIAL, "OVA" → OVA, "Season 1" → EPISODE, etc.
+        var folderEpisodeType = EpisodeTypes.FromFolderName(seasonFolderName);
+
+        // Scan for episodes directly in this folder
+        var totalEpCount = await ScanEpisodesInFolderAsync(seriesId, seasonPath, folderEpisodeType, ct);
+        Report($"    Found {totalEpCount} episode(s) in season root");
+
+        // Also scan for special sub-folders within a season folder, e.g. "Season 1/Specials"
+        var specialSubDirs = seasonDirInfo.GetDirectories()
+            .Where(d => EpisodeTypes.IsKnownSubfolder(d.Name))
+            .ToList();
+
+        foreach (var subDir in specialSubDirs)
         {
             ct.ThrowIfCancellationRequested();
-            var subFolderName = Path.GetFileName(subDir);
-
-            // Detect episode type from folder name — handles both exact ("OVA")
-            // and suffixed ("High School DxD S1 - OVA") folder names
+            var subFolderName = Path.GetFileName(subDir.FullName);
             var episodeType = EpisodeTypes.FromFolderName(subFolderName);
-            var subCount = await ScanEpisodesInFolderAsync(seriesId, subDir, episodeType, ct);
-            Report($"  Found {subCount} {episodeType} episode(s) in {subFolderName}/");
+            var subCount = await ScanEpisodesInFolderAsync(seriesId, subDir.FullName, episodeType, ct);
+            totalEpCount += subCount;
+            Report($"    Found {subCount} {episodeType} episode(s) in {subFolderName}/");
+        }
+
+        // Clean up: if no episodes were found at all, remove the empty series entry
+        if (totalEpCount == 0)
+        {
+            Report($"    Series '{seasonFolderName}' has 0 episodes — removing empty entry (ID: {seriesId})");
+            await _library.DeleteSeriesAsync(seriesId);
         }
     }
+
 
     private async Task<int> ScanEpisodesInFolderAsync(int seriesId, string folder,
         string episodeType, CancellationToken ct)
@@ -204,7 +288,7 @@ public class ScannerService : IScannerService
         {
             ct.ThrowIfCancellationRequested();
 
-            var seriesId = await _library.UpsertSeriesAsync(libraryId, seriesName, libraryPath);
+            var seriesId = await _library.UpsertSeriesAsync(libraryId, seriesName, libraryPath, seriesName, 1);
             Report($"  Series '{seriesName}' upserted — ID: {seriesId} ({files.Count} file(s))");
 
             foreach (var file in files)
@@ -222,6 +306,17 @@ public class ScannerService : IScannerService
     private async Task PruneDeletedEpisodesAsync(int libraryId, CancellationToken ct)
     {
         Report("Pruning deleted files...");
+
+        // [Fix] Safety Guard: Ensure Library Root is still accessible.
+        // If the network dropped mid-scan, 'Scan' might have just skipped files, 
+        // but 'Prune' would incorrectly delete everything.
+        var lib = await _library.GetLibraryByIdAsync(libraryId);
+        if (lib == null || !Directory.Exists(lib.Path))
+        {
+            Report($"[CRITICAL WARNING] Library path '{lib?.Path}' is inaccessible. ABORTING PRUNE to prevent data loss.");
+            return;
+        }
+
         var allSeries = await _library.GetSeriesByLibraryIdAsync(libraryId);
         var prunedEpisodes = 0;
         var prunedSeries = 0;
@@ -229,6 +324,15 @@ public class ScannerService : IScannerService
         foreach (var series in allSeries)
         {
             ct.ThrowIfCancellationRequested();
+
+            // [Fix] Secondary Safety: Check if the series drive/root is available before checking the specific folder.
+            // If 'D:\Anime' is the library, and 'D:\' is gone, don't delete 'Naruto'.
+            if (!Directory.Exists(Path.GetPathRoot(series.Path)))
+            {
+                Report($"  Skipping prune for '{series.FolderName}': Drive root inaccessible.");
+                continue;
+            }
+
             var episodes = await _library.GetEpisodesBySeriesIdAsync(series.Id);
             foreach (var ep in episodes)
             {

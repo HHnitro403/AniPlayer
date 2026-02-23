@@ -78,6 +78,13 @@ public class LibraryService : ILibraryService
             Queries.GetSeriesByPath, new { path });
     }
 
+    public async Task<IEnumerable<Series>> GetSeriesByGroupNameAsync(string seriesGroupName)
+    {
+        using var conn = _db.CreateConnection();
+        return await conn.QueryAsync<Series>(
+            Queries.GetSeriesByGroupName, new { seriesGroupName });
+    }
+
     public async Task<IEnumerable<Series>> GetRecentlyAddedSeriesAsync(int days)
     {
         using var conn = _db.CreateConnection();
@@ -85,11 +92,19 @@ public class LibraryService : ILibraryService
             Queries.GetRecentlyAddedSeries, new { daysOffset = $"-{days} days" });
     }
 
-    public async Task<int> UpsertSeriesAsync(int libraryId, string folderName, string path)
+    public async Task<int> UpsertSeriesAsync(int libraryId, string folderName, string path, string seriesGroupName, int seasonNumber)
     {
         using var conn = _db.CreateConnection();
         return await conn.QuerySingleAsync<int>(
-            Queries.InsertSeries, new { LibraryId = libraryId, FolderName = folderName, Path = path });
+            Queries.InsertSeries,
+            new
+            {
+                LibraryId = libraryId,
+                FolderName = folderName,
+                Path = path,
+                SeriesGroupName = seriesGroupName,
+                SeasonNumber = seasonNumber
+            });
     }
 
     public async Task UpdateSeriesMetadataAsync(Series series)
@@ -169,5 +184,30 @@ public class LibraryService : ILibraryService
         await conn.ExecuteAsync(
             Queries.UpsertSeriesTrackPreference,
             new { seriesId, audioLang = audioLanguage, audioTitle, audioTrackId, subLang = (string?)null, subName = (string?)null });
+    }
+
+    public async Task UpsertSeriesSubtitlePreferenceAsync(int seriesId, string subtitleLanguage, string? subtitleName)
+    {
+        using var conn = _db.CreateConnection();
+        // Preserve existing audio preferences while updating subtitle preferences
+        var existing = await GetSeriesTrackPreferenceAsync(seriesId);
+        await conn.ExecuteAsync(
+            Queries.UpsertSeriesTrackPreference,
+            new {
+                seriesId,
+                audioLang = existing?.PreferredAudioLanguage,
+                audioTitle = existing?.PreferredAudioTitle,
+                audioTrackId = existing?.PreferredAudioTrackId,
+                subLang = subtitleLanguage,
+                subName = subtitleName
+            });
+    }
+
+    public async Task SetEpisodeExternalSubtitleAsync(int episodeId, string? subtitlePath)
+    {
+        using var conn = _db.CreateConnection();
+        await conn.ExecuteAsync(
+            "UPDATE Episodes SET external_subtitle_path = @subtitlePath WHERE id = @episodeId",
+            new { episodeId, subtitlePath });
     }
 }
