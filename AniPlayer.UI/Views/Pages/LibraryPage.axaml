@@ -25,6 +25,7 @@
                          VerticalAlignment="Center"/>
                 <Button x:Name="AddFolderButton"
                         Content="+ Add Folder"
+                        Classes="Primary"
                         Padding="12,8"
                         Click="AddFolderButton_Click"/>
             </StackPanel>
@@ -37,13 +38,21 @@
                 <StackPanel x:Name="EmptyState"
                             HorizontalAlignment="Center"
                             VerticalAlignment="Center"
-                            Spacing="12">
-                    <TextBlock Text="No series in your library"
-                               FontSize="18" Opacity="0.5"
+                            Spacing="12"
+                            Margin="0,100">
+                    <TextBlock x:Name="EmptyStateTitle"
+                               Text="No series in your library"
+                               FontSize="20" FontWeight="SemiBold"
                                HorizontalAlignment="Center"/>
-                    <TextBlock Text="Add a folder to start scanning for anime."
-                               FontSize="14" Opacity="0.35"
+                    <TextBlock x:Name="EmptyStateDescription"
+                               Text="Add a folder to start scanning for anime."
+                               FontSize="14" Opacity="0.5"
                                HorizontalAlignment="Center"/>
+                    <Button Content="Add Your First Folder"
+                            Classes="Primary"
+                            Margin="0,12"
+                            HorizontalAlignment="Center"
+                            Click="AddFolderButton_Click"/>
                 </StackPanel>
 
                 <!-- Grid of series cards -->

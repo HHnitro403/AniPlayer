@@ -6,14 +6,14 @@
              x:Class="AniPlayer.UI.Views.Controls.EpisodeRow"
              Cursor="Hand">
 
-    <Border Background="#15152A" CornerRadius="6" Padding="12,8"
+    <Border Background="{DynamicResource BgBase}" CornerRadius="{DynamicResource RadiusS}" Padding="12,8"
             Margin="0,1">
         <Grid ColumnDefinitions="Auto,*,Auto">
             <!-- Episode number -->
             <TextBlock x:Name="EpisodeNumberText"
                        Text="01"
                        FontSize="14" FontWeight="SemiBold"
-                       Foreground="#CCCCDD"
+                       Foreground="{DynamicResource TextPrimary}"
                        VerticalAlignment="Center"
                        Width="40"/>
 
@@ -22,13 +22,13 @@
                         VerticalAlignment="Center">
                 <TextBlock x:Name="EpisodeTitleText"
                            Text="Episode Title"
-                           FontSize="13" Foreground="#BBBBCC"
+                           FontSize="13" Foreground="{DynamicResource TextSecondary}"
                            TextTrimming="CharacterEllipsis"/>
                 <Border x:Name="TypeBadge"
-                        Background="#2A2A4A" CornerRadius="4"
+                        Background="{DynamicResource BgSurface}" CornerRadius="4"
                         Padding="6,2" IsVisible="False">
                     <TextBlock x:Name="TypeBadgeText"
-                               FontSize="10" Foreground="#8888AA"/>
+                               FontSize="10" Foreground="{DynamicResource TextSecondary}"/>
                 </Border>
             </StackPanel>
 
@@ -37,10 +37,10 @@
                         VerticalAlignment="Center" Margin="12,0">
                 <Border x:Name="ProgressBar"
                         Width="60" Height="4"
-                        Background="#2A2A4A" CornerRadius="2"
+                        Background="{DynamicResource BgSurface}" CornerRadius="2"
                         IsVisible="False">
                     <Border x:Name="ProgressFill"
-                            Background="#6C6CFF" CornerRadius="2"
+                            Background="{DynamicResource AccentPrimary}" CornerRadius="2"
                             HorizontalAlignment="Left" Width="0"/>
                 </Border>
             </StackPanel>

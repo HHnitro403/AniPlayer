@@ -42,19 +42,29 @@
                 </ItemsControl>
             </StackPanel>
 
-            <!-- Quick Actions -->
-            <StackPanel x:Name="QuickActionsSection" Spacing="12">
-                <TextBlock Text="Quick Actions"
-                           FontSize="22" FontWeight="SemiBold"
-                           Foreground="{DynamicResource SystemControlForegroundBaseHighBrush}"/>
-                <StackPanel Orientation="Horizontal" Spacing="12">
+            <!-- Quick Actions / Welcome -->
+            <StackPanel x:Name="QuickActionsSection" Spacing="24" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,60,0,0">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="Welcome to AniPlayer"
+                               FontSize="32" FontWeight="Bold"
+                               HorizontalAlignment="Center"
+                               Foreground="{DynamicResource AccentPrimary}"/>
+                    <TextBlock Text="Your local anime library is just one folder away."
+                               FontSize="16" Opacity="0.6"
+                               HorizontalAlignment="Center"/>
+                </StackPanel>
+                
+                <StackPanel Orientation="Horizontal" Spacing="16" HorizontalAlignment="Center">
                     <Button x:Name="AddLibraryButton"
-                            Content="Add Library Folder"
-                            Padding="16,10"
+                            Content="Add Your First Library"
+                            Classes="Primary"
+                            Padding="24,14"
+                            FontSize="16"
                             Click="AddLibraryButton_Click"/>
                     <Button x:Name="OpenFileButton"
                             Content="Open Video File"
-                            Padding="16,10"
+                            Padding="24,14"
+                            FontSize="16"
                             Click="OpenFileButton_Click"/>
                 </StackPanel>
             </StackPanel>

@@ -1,10 +1,48 @@
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <Style>
-        <Style.Resources>
+    <Styles.Resources>
+        <ResourceDictionary>
+            <!-- Colors -->
+            <Color x:Key="BgBaseColor">#0D0D1A</Color>
+            <Color x:Key="BgSurfaceColor">#12121E</Color>
+            <Color x:Key="AccentPrimaryColor">#6C6CFF</Color>
+            <Color x:Key="TextPrimaryColor">#E8E8FF</Color>
+            <Color x:Key="TextSecondaryColor">#A0A0B8</Color>
+            <Color x:Key="DangerColor">#FF4C4C</Color>
+
+            <SolidColorBrush x:Key="BgBase" Color="{StaticResource BgBaseColor}" />
+            <SolidColorBrush x:Key="BgSurface" Color="{StaticResource BgSurfaceColor}" />
+            <SolidColorBrush x:Key="BgCard" Color="#1E1E30" />
+            <SolidColorBrush x:Key="AccentPrimary" Color="{StaticResource AccentPrimaryColor}" />
+            <SolidColorBrush x:Key="TextPrimary" Color="{StaticResource TextPrimaryColor}" />
+            <SolidColorBrush x:Key="TextSecondary" Color="{StaticResource TextSecondaryColor}" />
+            <SolidColorBrush x:Key="Danger" Color="{StaticResource DangerColor}" />
+
+            <!-- Spacing -->
+            <x:Double x:Key="SpacingXS">4</x:Double>
+            <x:Double x:Key="SpacingS">8</x:Double>
+            <x:Double x:Key="SpacingM">16</x:Double>
+            <x:Double x:Key="SpacingL">24</x:Double>
+            <x:Double x:Key="SpacingXL">32</x:Double>
+            <x:Double x:Key="SpacingXXL">48</x:Double>
+
+            <!-- Radii -->
+            <CornerRadius x:Key="RadiusS">4</CornerRadius>
+            <CornerRadius x:Key="RadiusM">8</CornerRadius>
+            <CornerRadius x:Key="RadiusL">12</CornerRadius>
+
+            <!-- Icons -->
+            <StreamGeometry x:Key="IconPlay">M8,5.14V19.14L19,12.14L8,5.14Z</StreamGeometry>
+            <StreamGeometry x:Key="IconPause">M14,19H18V5H14M6,19H10V5H6V19Z</StreamGeometry>
+            <StreamGeometry x:Key="IconStop">M18,18H6V6H18V18Z</StreamGeometry>
+            <StreamGeometry x:Key="IconNext">M6,18L14.5,12L6,6M16,6V18H18V6</StreamGeometry>
+            <StreamGeometry x:Key="IconPrevious">M18,6L9.5,12L18,18M8,18V6H6V18</StreamGeometry>
+            <StreamGeometry x:Key="IconVolume">M14,3.23V5.29C16.89,6.15 19,8.83 19,12C19,15.17 16.89,17.85 14,18.71V20.77C18.01,19.86 21,16.28 21,12C21,7.72 18.01,4.14 14,3.23M16.5,12C16.5,10.23 15.5,8.71 14,7.97V16.03C15.5,15.29 16.5,13.77 16.5,12M3,9V15H7L12,20V4L7,9H3Z</StreamGeometry>
+            <StreamGeometry x:Key="IconFullscreen">M7,14H5V19H10V17H7V14M5,10H7V7H10V5H5V10M17,14V17H14V19H19V14H17M14,5V7H17V10H19V5H14Z</StreamGeometry>
+            
             <StreamGeometry x:Key="fast_forward_regular">
                 M11.72,12,5.36,6.38A.75.75,0,0,1,6.42,5.32l6.88,6.12a.75.75,0,0,1,0,1.12L6.42,18.68A.75.75,0,0,1,5.36,17.62Z M18.64,5.32a.75.75,0,0,0-1.06,1.06L18.94,12l-1.36,1.62a.75.75,0,0,0,1.06,1.06l2.12-2.37a.75.75,0,0,0,0-1.12Z
             </StreamGeometry>
-        </Style.Resources>
-    </Style>
+        </ResourceDictionary>
+    </Styles.Resources>
 </Styles>

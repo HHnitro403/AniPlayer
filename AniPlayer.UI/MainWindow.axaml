@@ -8,7 +8,7 @@
         Title="AniPlayer"
         Width="1200" Height="750"
         MinWidth="800" MinHeight="500"
-        Background="#12121E">
+        Background="{DynamicResource BgSurface}">
 
     <Grid ColumnDefinitions="Auto,*">
 
@@ -16,7 +16,7 @@
         <local:Sidebar x:Name="SidebarControl" Grid.Column="0"/>
 
         <!-- Page content area -->
-        <Border Grid.Column="1" Background="#12121E">
+        <Border Grid.Column="1" Background="{DynamicResource BgSurface}">
             <ContentControl x:Name="PageHost"/>
         </Border>
 

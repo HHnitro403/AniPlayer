@@ -65,8 +65,18 @@ public partial class PlayerPage : UserControl
         AttachedToVisualTree += OnAttachedToVisualTree;
         DetachedFromVisualTree += OnDetachedFromVisualTree;
 
-        ProgressSlider.AddHandler(PointerPressedEvent, OnSliderPointerPressed, RoutingStrategies.Tunnel);
-        ProgressSlider.AddHandler(PointerReleasedEvent, OnSliderPointerReleased, RoutingStrategies.Tunnel);
+        PlayerControlsControl.Progress.AddHandler(PointerPressedEvent, OnSliderPointerPressed, RoutingStrategies.Tunnel);
+        PlayerControlsControl.Progress.AddHandler(PointerReleasedEvent, OnSliderPointerReleased, RoutingStrategies.Tunnel);
+
+        PlayerControlsControl.PlayPauseClicked += PlayPauseButton_Click;
+        PlayerControlsControl.StopClicked += StopButton_Click;
+        PlayerControlsControl.NextClicked += NextButton_Click;
+        PlayerControlsControl.FullscreenClicked += FullscreenButton_Click;
+        PlayerControlsControl.Volume.PropertyChanged += (s, e) =>
+        {
+            if (e.Property == Slider.ValueProperty && e.NewValue is double val)
+                AdjustVolumeTo((int)val);
+        };
 
         RootGrid.PointerMoved += OnPlayerPointerMoved;
 
@@ -74,6 +84,12 @@ public partial class PlayerPage : UserControl
         PlaceholderText.IsVisible = true;
         SkipOverlayButton.IsVisible = false;
         ControlsBar.IsVisible = true;
+    }
+
+    private void AdjustVolumeTo(int value)
+    {
+        if (_mpvHandle == IntPtr.Zero) return;
+        SetOption("volume", $"{value:F0}");
     }
 
     private async void OnAttachedToVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
@@ -120,7 +136,7 @@ public partial class PlayerPage : UserControl
             if (VideoHostControl.NativeHandle == IntPtr.Zero)
             {
                 Logger.Log("VideoHostControl.NativeHandle is Zero, retrying in 500ms");
-                StatusText.Text = "Waiting for video surface...";
+                PlayerControlsControl.SetNowPlaying("Loading", "Waiting for video surface...");
                 await Task.Delay(500);
                 Dispatcher.UIThread.Post(InitializeMpv);
                 return;
@@ -137,7 +153,7 @@ public partial class PlayerPage : UserControl
             if (_mpvHandle == IntPtr.Zero)
             {
                 Logger.LogError("Failed to create mpv instance");
-                StatusText.Text = "Error — mpv create failed";
+                PlayerControlsControl.SetNowPlaying("Error", "mpv create failed");
                 return;
             }
 
@@ -155,24 +171,24 @@ public partial class PlayerPage : UserControl
 
             int initResult = LibMpvInterop.mpv_initialize(_mpvHandle);
             Logger.Log($"mpv_initialize: {initResult}");
-            if (initResult < 0) { StatusText.Text = $"Error — init ({initResult})"; return; }
+            if (initResult < 0) { PlayerControlsControl.SetNowPlaying("Error", $"init ({initResult})"); return; }
 
             VideoHostControl.InitializeRenderer(_mpvHandle, _vsyncEnabled);
             if (VideoHostControl.Renderer == null || !VideoHostControl.Renderer.IsInitialized)
             {
-                StatusText.Text = "Error — renderer";
+                PlayerControlsControl.SetNowPlaying("Error", "renderer");
                 return;
             }
 
             _mpvInitialized = true;
-            StatusText.Text = "Ready";
+            PlayerControlsControl.SetNowPlaying("Ready", "Waiting for file...");
             Logger.Log("=== InitializeMpv END (SUCCESS) ===");
             _mpvReady?.TrySetResult();
         }
         catch (Exception ex)
         {
             Logger.LogError("InitializeMpv exception", ex);
-            StatusText.Text = $"Error — {ex.Message}";
+            PlayerControlsControl.SetNowPlaying("Error", ex.Message);
             _mpvReady?.TrySetResult();
         }
     }
@@ -207,35 +223,35 @@ public partial class PlayerPage : UserControl
     {
         if (_mpvHandle == IntPtr.Zero || !_mpvInitialized || _currentEpisode == null) return;
         SetOption("pause", "yes");
-        PlayPauseButton.Content = "▶ Play";
-        StatusText.Text = "Paused";
+        PlayerControlsControl.SetPlayState(false);
+        PlayerControlsControl.SetNowPlaying(_currentEpisode?.DisplayName ?? "No file loaded", "Paused");
     }
 
-    private void PlayPauseButton_Click(object? sender, RoutedEventArgs e)
+    private void PlayPauseButton_Click(object? sender, EventArgs e)
     {
         if (_mpvHandle == IntPtr.Zero || !_mpvInitialized) return;
 
         var paused = GetMpvPropertyString("pause") == "yes";
         SetOption("pause", paused ? "no" : "yes");
 
-        PlayPauseButton.Content = paused ? "⏸ Pause" : "▶ Play";
-        StatusText.Text = paused ? "Playing" : "Paused";
+        PlayerControlsControl.SetPlayState(paused); // if it was paused, it's now playing
+        PlayerControlsControl.SetNowPlaying(_currentEpisode?.DisplayName ?? "No file loaded", paused ? "Playing" : "Paused");
     }
 
-    private async void StopButton_Click(object? sender, RoutedEventArgs e)
+    private async void StopButton_Click(object? sender, EventArgs e)
     {
         await CleanupCurrentFileAsync();
         PlaybackStopped?.Invoke();
     }
 
-    private async void NextButton_Click(object? sender, RoutedEventArgs e)
+    private async void NextButton_Click(object? sender, EventArgs e)
     {
         if (_currentEpisode == null) return;
         await SaveCurrentProgressAsync(markCompleted: true);
         await PlayNextInPlaylistAsync();
     }
 
-    private void FullscreenButton_Click(object? sender, RoutedEventArgs e) => FullscreenToggleRequested?.Invoke();
+    private void FullscreenButton_Click(object? sender, EventArgs e) => FullscreenToggleRequested?.Invoke();
 
     private void SeekBackButton_Click(object? sender, RoutedEventArgs e)
     {
@@ -254,7 +270,7 @@ public partial class PlayerPage : UserControl
 
         switch (key)
         {
-            case Key.Space: PlayPauseButton_Click(null, null!); return true;
+            case Key.Space: PlayPauseButton_Click(null, EventArgs.Empty); return true;
             case Key.Left: SeekBackButton_Click(null, null!); return true;  // Trigger button event
             case Key.Right: SeekForwardButton_Click(null, null!); return true;  // Trigger button event
             case Key.Up: AdjustVolume(10); return true;
@@ -262,7 +278,7 @@ public partial class PlayerPage : UserControl
             case Key.A: CycleAudioTrack(); return true;
             case Key.S: CycleSubtitleTrack(); return true;
             case Key.F: FullscreenToggleRequested?.Invoke(); return true;
-            case Key.N: NextButton_Click(null, null!); return true;
+            case Key.N: NextButton_Click(null, EventArgs.Empty); return true;
             case Key.M: ToggleMute(); return true;
             default: return false;
         }
@@ -328,7 +344,7 @@ public partial class PlayerPage : UserControl
         await LoadFileIntoMpvAsync(newEpisode.FilePath);
 
         _isTransitioning = false;
-        NextButton.IsEnabled = _playlistIndex < _playlist.Count - 1;
+        PlayerControlsControl.SetNextEnabled(_playlistIndex < _playlist.Count - 1);
     }
 
     private async Task LoadFileIntoMpvAsync(string filePath)
@@ -344,7 +360,7 @@ public partial class PlayerPage : UserControl
         if (!_mpvInitialized || _mpvHandle == IntPtr.Zero || !File.Exists(filePath))
         {
             Logger.LogError($"Pre-flight check failed for '{filePath}'");
-            StatusText.Text = "Error — pre-flight check failed";
+            PlayerControlsControl.SetNowPlaying("Error", "pre-flight check failed");
             return;
         }
 
@@ -377,9 +393,8 @@ public partial class PlayerPage : UserControl
         VideoHostControl.Renderer?.Render();
 
         PlaceholderText.IsVisible = false;
-        NowPlayingText.Text = Path.GetFileName(filePath);
-        StatusText.Text = "Playing";
-        PlayPauseButton.Content = "⏸ Pause";
+        PlayerControlsControl.SetNowPlaying(Path.GetFileName(filePath), "Playing");
+        PlayerControlsControl.SetPlayState(true);
 
         StartPositionTimer();
 
@@ -576,7 +591,7 @@ public partial class PlayerPage : UserControl
             var label = !string.IsNullOrEmpty(info.lang) && !string.IsNullOrEmpty(info.title)
                 ? $"{info.lang} — {info.title}"
                 : info.title ?? info.lang ?? $"Track {trackIds[nextIndex]}";
-            StatusText.Text = $"Audio: {label}";
+            PlayerControlsControl.SetNowPlaying(_currentEpisode?.DisplayName ?? "No file loaded", $"Audio: {label}");
         }
     }
 
@@ -585,7 +600,7 @@ public partial class PlayerPage : UserControl
         if (_mpvHandle == IntPtr.Zero) return;
         var muted = GetMpvPropertyString("mute") == "yes";
         SetOption("mute", muted ? "no" : "yes");
-        StatusText.Text = muted ? "Unmuted" : "Muted";
+        PlayerControlsControl.SetNowPlaying(_currentEpisode?.DisplayName ?? "No file loaded", muted ? "Unmuted" : "Muted");
     }
 
     private async Task UpdateSubtitleTracksAsync()
@@ -727,14 +742,14 @@ public partial class PlayerPage : UserControl
         // Show brief status
         if (nextId == 0)
         {
-            StatusText.Text = "Subtitles: Off";
+            PlayerControlsControl.SetNowPlaying(_currentEpisode?.DisplayName ?? "No file loaded", "Subtitles: Off");
         }
         else if (_subtitleTrackInfo.TryGetValue(nextId, out var info))
         {
             var label = !string.IsNullOrEmpty(info.lang) && !string.IsNullOrEmpty(info.title)
                 ? $"{info.lang} — {info.title}"
                 : info.title ?? info.lang ?? $"Track {nextId}";
-            StatusText.Text = $"Subtitle: {label}";
+            PlayerControlsControl.SetNowPlaying(_currentEpisode?.DisplayName ?? "No file loaded", $"Subtitle: {label}");
         }
     }
 
@@ -805,10 +820,9 @@ public partial class PlayerPage : UserControl
              double.TryParse(durStr, NumberStyles.Any, CultureInfo.InvariantCulture, out var dur) &&
              dur > 0)
             {
-                ProgressSlider.Maximum = dur;
-                ProgressSlider.Value = pos;
-                TimeCurrentText.Text = FormatTime(pos);
-                TimeTotalText.Text = FormatTime(dur);
+                PlayerControlsControl.Progress.Maximum = dur;
+                PlayerControlsControl.Progress.Value = pos;
+                PlayerControlsControl.SetTime(FormatTime(pos), FormatTime(dur));
 
                 await SaveCurrentProgressAsync(force: false);
             }
@@ -823,7 +837,7 @@ public partial class PlayerPage : UserControl
     {
         if (_currentEpisode == null) return;
 
-        var now = ProgressSlider.Value;
+        var now = PlayerControlsControl.Progress.Value;
 
         if (_currentEpisode.HasIntro && now >= _currentEpisode.IntroStart && now < _currentEpisode.IntroEnd)
         {
@@ -855,7 +869,7 @@ public partial class PlayerPage : UserControl
 
         if (target == -1.0)
         {
-            NextButton_Click(sender, e);
+            NextButton_Click(sender, EventArgs.Empty);
         }
         else
         {
@@ -917,7 +931,7 @@ public partial class PlayerPage : UserControl
         if (_isUserSeeking)
         {
             _isUserSeeking = false;
-            SeekAbsolute(ProgressSlider.Value);
+            SeekAbsolute(PlayerControlsControl.Progress.Value);
         }
     }
 
@@ -1051,16 +1065,14 @@ public partial class PlayerPage : UserControl
             try { SetOption("command", "stop"); } catch { }
 
         _currentEpisode = null;
-        NowPlayingText.Text = "No file loaded";
-        StatusText.Text = "Stopped";
+        PlayerControlsControl.SetNowPlaying("No file loaded", "Stopped");
         AudioTracksPanel.Children.Clear();
         SubtitleTracksPanel.Children.Clear();
         PlaceholderText.IsVisible = true;
-        PlayPauseButton.Content = "▶ Play";
-        ProgressSlider.Value = 0;
-        ProgressSlider.Maximum = 100;
-        TimeCurrentText.Text = "0:00";
-        TimeTotalText.Text = "0:00";
+        PlayerControlsControl.SetPlayState(false);
+        PlayerControlsControl.Progress.Value = 0;
+        PlayerControlsControl.Progress.Maximum = 100;
+        PlayerControlsControl.SetTime("0:00", "0:00");
     }
 
     private void PollMpvEvents()

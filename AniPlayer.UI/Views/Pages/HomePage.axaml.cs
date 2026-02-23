@@ -34,10 +34,15 @@ public partial class HomePage : UserControl
         Logger.Log($"[HomePage] DisplayContinueWatching: {list.Count} items", LogRegion.UI);
 
         ContinueWatchingList.ItemsSource = null;
-        var cards = new List<Control>();
+        var cards = new List<SeriesCard>();
 
         foreach (var (ep, progress, series) in list)
-            cards.Add(CreateContinueWatchingCard(ep, progress, series));
+        {
+            var card = new SeriesCard();
+            card.SetContinueWatchingData(ep, progress, series);
+            card.Clicked += (id) => ResumeEpisodeRequested?.Invoke(id);
+            cards.Add(card);
+        }
 
         ContinueWatchingList.ItemsSource = cards;
         ContinueWatchingEmpty.IsVisible = list.Count == 0;
@@ -50,10 +55,15 @@ public partial class HomePage : UserControl
         Logger.Log($"[HomePage] DisplayRecentlyAdded: {list.Count} series", LogRegion.UI);
 
         RecentlyAddedList.ItemsSource = null;
-        var cards = new List<Control>();
+        var cards = new List<SeriesCard>();
 
         foreach (var s in list)
-            cards.Add(CreateSeriesCard(s));
+        {
+            var card = new SeriesCard();
+            card.SetData(s);
+            card.Clicked += (id) => SeriesSelected?.Invoke(id);
+            cards.Add(card);
+        }
 
         RecentlyAddedList.ItemsSource = cards;
         RecentlyAddedEmpty.IsVisible = list.Count == 0;
@@ -64,200 +74,6 @@ public partial class HomePage : UserControl
     {
         Logger.Log($"[HomePage] SetHasLibraries: {hasLibraries}", LogRegion.UI);
         QuickActionsSection.IsVisible = !hasLibraries;
-    }
-
-    private Border CreateSeriesCard(Series series)
-    {
-        var stack = new StackPanel { Spacing = 6, Width = 150 };
-
-        // Cover image or placeholder
-        if (!string.IsNullOrEmpty(series.CoverImagePath) && File.Exists(series.CoverImagePath))
-        {
-            var img = new Image
-            {
-                Source = new Bitmap(series.CoverImagePath),
-                Height = 200,
-                Stretch = Stretch.UniformToFill,
-            };
-            var imgBorder = new Border
-            {
-                CornerRadius = new CornerRadius(6),
-                ClipToBounds = true,
-                Child = img,
-            };
-            stack.Children.Add(imgBorder);
-        }
-        else
-        {
-            var placeholder = new Border
-            {
-                Height = 200,
-                CornerRadius = new CornerRadius(6),
-                Background = new SolidColorBrush(Color.FromArgb(40, 255, 255, 255)),
-                Child = new TextBlock
-                {
-                    Text = series.DisplayTitle.Length > 0
-                        ? series.DisplayTitle[0].ToString()
-                        : "?",
-                    FontSize = 36,
-                    Opacity = 0.3,
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                    VerticalAlignment = VerticalAlignment.Center,
-                },
-            };
-            stack.Children.Add(placeholder);
-        }
-
-        // Title
-        stack.Children.Add(new TextBlock
-        {
-            Text = series.DisplayTitle,
-            FontWeight = FontWeight.SemiBold,
-            FontSize = 13,
-            TextTrimming = TextTrimming.CharacterEllipsis,
-            TextWrapping = TextWrapping.Wrap,
-            MaxHeight = 36,
-        });
-
-        var card = new Border
-        {
-            Padding = new Thickness(8),
-            Margin = new Thickness(4),
-            CornerRadius = new CornerRadius(8),
-            Cursor = new Cursor(StandardCursorType.Hand),
-            Child = stack,
-        };
-
-        var seriesId = series.Id;
-        card.PointerPressed += (_, _) => SeriesSelected?.Invoke(seriesId);
-
-        return card;
-    }
-
-    private Border CreateContinueWatchingCard(Episode episode, WatchProgress progress, Series? series)
-    {
-        var stack = new StackPanel { Spacing = 4, Width = 180 };
-
-        // Cover with progress bar overlay
-        var coverPanel = new Panel { Height = 110 };
-
-        if (series != null && !string.IsNullOrEmpty(series.CoverImagePath) && File.Exists(series.CoverImagePath))
-        {
-            var img = new Image
-            {
-                Source = new Bitmap(series.CoverImagePath),
-                Height = 110,
-                Stretch = Stretch.UniformToFill,
-            };
-            coverPanel.Children.Add(new Border
-            {
-                CornerRadius = new CornerRadius(6),
-                ClipToBounds = true,
-                Child = img,
-            });
-        }
-        else
-        {
-            coverPanel.Children.Add(new Border
-            {
-                Height = 110,
-                CornerRadius = new CornerRadius(6),
-                Background = new SolidColorBrush(Color.FromArgb(40, 255, 255, 255)),
-                Child = new TextBlock
-                {
-                    Text = series?.DisplayTitle.Length > 0
-                        ? series.DisplayTitle[0].ToString()
-                        : "?",
-                    FontSize = 28,
-                    Opacity = 0.3,
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                    VerticalAlignment = VerticalAlignment.Center,
-                },
-            });
-        }
-
-        // Timestamp badge (top-right) — e.g. "12:34"
-        var ts = TimeSpan.FromSeconds(progress.PositionSeconds);
-        var timeText = ts.Hours > 0 ? ts.ToString(@"h\:mm\:ss") : ts.ToString(@"m\:ss");
-        coverPanel.Children.Add(new Border
-        {
-            Background = new SolidColorBrush(Color.FromArgb(200, 0, 0, 0)),
-            CornerRadius = new CornerRadius(4),
-            Padding = new Thickness(5, 2),
-            HorizontalAlignment = HorizontalAlignment.Right,
-            VerticalAlignment = VerticalAlignment.Top,
-            Margin = new Thickness(0, 6, 6, 0),
-            Child = new TextBlock
-            {
-                Text = timeText,
-                FontSize = 10,
-                Foreground = Brushes.White,
-            },
-        });
-
-        // Progress bar at bottom of cover (proportional grid)
-        var progressPercent = progress.ProgressPercent;
-        var progressGrid = new Grid
-        {
-            Height = 3,
-            VerticalAlignment = VerticalAlignment.Bottom,
-            ColumnDefinitions = new ColumnDefinitions(
-                string.Format(CultureInfo.InvariantCulture, "{0:F4}*,{1:F4}*", progressPercent, 1 - progressPercent)),
-        };
-        var fillBar = new Border
-        {
-            Background = new SolidColorBrush(Color.FromRgb(90, 60, 180)),
-            CornerRadius = new CornerRadius(0, 0, 0, 6),
-        };
-        Grid.SetColumn(fillBar, 0);
-        var emptyBar = new Border
-        {
-            Background = new SolidColorBrush(Color.FromArgb(80, 255, 255, 255)),
-            CornerRadius = new CornerRadius(0, 0, 6, 0),
-        };
-        Grid.SetColumn(emptyBar, 1);
-        progressGrid.Children.Add(fillBar);
-        progressGrid.Children.Add(emptyBar);
-        coverPanel.Children.Add(progressGrid);
-
-        stack.Children.Add(coverPanel);
-
-        // Episode name
-        stack.Children.Add(new TextBlock
-        {
-            Text = episode.DisplayName,
-            FontWeight = FontWeight.SemiBold,
-            FontSize = 12,
-            TextTrimming = TextTrimming.CharacterEllipsis,
-            MaxLines = 1,
-        });
-
-        // Series title (smaller, dimmed)
-        if (series != null)
-        {
-            stack.Children.Add(new TextBlock
-            {
-                Text = series.DisplayTitle,
-                FontSize = 11,
-                Opacity = 0.5,
-                TextTrimming = TextTrimming.CharacterEllipsis,
-                MaxLines = 1,
-            });
-        }
-
-        var card = new Border
-        {
-            Padding = new Thickness(6),
-            Margin = new Thickness(4),
-            CornerRadius = new CornerRadius(8),
-            Cursor = new Cursor(StandardCursorType.Hand),
-            Child = stack,
-        };
-
-        var episodeId = episode.Id;
-        card.PointerPressed += (_, _) => ResumeEpisodeRequested?.Invoke(episodeId);
-
-        return card;
     }
 
     private async void OpenFileButton_Click(object? sender, RoutedEventArgs e)

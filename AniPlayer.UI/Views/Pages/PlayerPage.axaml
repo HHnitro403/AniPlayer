@@ -17,7 +17,7 @@
             <local:VideoHost x:Name="VideoHostControl"/>
             <TextBlock x:Name="PlaceholderText"
                        Text="Open a video file to start playback"
-                       Foreground="#88FFFFFF"
+                       Foreground="{DynamicResource TextSecondary}"
                        FontSize="16"
                        HorizontalAlignment="Center"
                        VerticalAlignment="Center"
@@ -32,7 +32,7 @@
                     VerticalAlignment="Bottom"
                     Margin="0,0,30,100"
                     Padding="15,10"
-                    Background="#CC000000"
+                    Background="#CC0D0D1A"
                     Foreground="White"
                     CornerRadius="5"
                     Focusable="False"
@@ -40,8 +40,8 @@
                     Click="OnSkipButtonClick">
                 <Button.Styles>
                     <Style Selector="Button:pointerover /template/ ContentPresenter">
-                        <Setter Property="Background" Value="#E6202020"/>
-                        <Setter Property="Foreground" Value="#4CC2FF"/>
+                        <Setter Property="Background" Value="#E612121E"/>
+                        <Setter Property="Foreground" Value="{DynamicResource AccentPrimary}"/>
                     </Style>
                 </Button.Styles>
                 <StackPanel Orientation="Horizontal" Spacing="10">
@@ -52,112 +52,18 @@
         </Grid>
 
         <!-- Modern Controls Bar (Row 1) — separate from native window, always accessible -->
-        <Border x:Name="ControlsBar"
-                Grid.Row="1"
-                Background="#1E1E2E"
-                BorderBrush="#2A2A3E"
-                BorderThickness="0,1,0,0"
-                Padding="20,16"
-                PointerEntered="OnControlsBarPointerEntered"
-                PointerExited="OnControlsBarPointerExited">
-            <Grid RowDefinitions="Auto,Auto,Auto">
+        <StackPanel x:Name="ControlsBar" Grid.Row="1"
+                    PointerEntered="OnControlsBarPointerEntered"
+                    PointerExited="OnControlsBarPointerExited">
+            
+            <local:PlayerControls x:Name="PlayerControlsControl" />
 
-				<!-- Row 0: Progress Bar -->
-				<Grid ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,28">
-					<TextBlock x:Name="TimeCurrentText" Text="0:00"
-							   Foreground="#B8B8D0" FontSize="12" FontWeight="Medium"
-							   VerticalAlignment="Center" Margin="0,0,12,0"/>
-					<Slider x:Name="ProgressSlider" Grid.Column="1"
-							Minimum="0" Maximum="100" Value="0"
-							VerticalAlignment="Center"
-							Focusable="False">
-						<Slider.Styles>
-							<Style Selector="Slider#ProgressSlider /template/ Border#TrackBackground">
-								<Setter Property="MaxHeight" Value="4"/>
-							</Style>
-							<Style Selector="Slider#ProgressSlider /template/ Border#PART_SelectionRange">
-								<Setter Property="MaxHeight" Value="4"/>
-							</Style>
-						</Slider.Styles>
-					</Slider>
-					<TextBlock x:Name="TimeTotalText" Text="0:00"
-							   Foreground="#B8B8D0" FontSize="12" FontWeight="Medium"
-							   VerticalAlignment="Center" Margin="12,0,0,0" Grid.Column="2"/>
-				</Grid>
-
-                <!-- Row 1: Transport Controls & Now Playing -->
-                <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto" Margin="0,8,0,16">
-                    <!-- Left: Transport Buttons -->
-                    <StackPanel Orientation="Horizontal" Spacing="10">
-                        <Button x:Name="PlayPauseButton" Content="▶ Play"
-                                Padding="16,8" MinWidth="90"
-                                Focusable="False"
-                                Click="PlayPauseButton_Click"
-                                Background="#4CC2FF"
-                                Foreground="White"
-                                CornerRadius="6"
-                                FontWeight="SemiBold"/>
-                        <Button x:Name="SeekBackButton" Content="⏪ -5s"
-                                Padding="12,8"
-                                Focusable="False"
-                                Click="SeekBackButton_Click"
-                                Background="#3A3A4E"
-                                Foreground="#E0E0F0"
-                                CornerRadius="6"
-                                ToolTip.Tip="Seek backward 5 seconds (Left Arrow)"/>
-                        <Button x:Name="SeekForwardButton" Content="⏩ +5s"
-                                Padding="12,8"
-                                Focusable="False"
-                                Click="SeekForwardButton_Click"
-                                Background="#3A3A4E"
-                                Foreground="#E0E0F0"
-                                CornerRadius="6"
-                                ToolTip.Tip="Seek forward 5 seconds (Right Arrow)"/>
-                        <Button x:Name="StopButton" Content="⏹ Stop"
-                                Padding="12,8"
-                                Focusable="False"
-                                Click="StopButton_Click"
-                                Background="#3A3A4E"
-                                Foreground="#E0E0F0"
-                                CornerRadius="6"/>
-                        <Button x:Name="NextButton" Content="⏭ Next"
-                                Padding="12,8" IsEnabled="False"
-                                Focusable="False"
-                                Click="NextButton_Click"
-                                Background="#3A3A4E"
-                                Foreground="#E0E0F0"
-                                CornerRadius="6"/>
-                    </StackPanel>
-
-                    <!-- Center: Now Playing Info -->
-                    <StackPanel Grid.Column="1" HorizontalAlignment="Center"
-                                VerticalAlignment="Center">
-                        <TextBlock x:Name="NowPlayingText"
-                                   Text="No file loaded"
-                                   Foreground="#E8E8F8" FontSize="14" FontWeight="Medium"
-                                   HorizontalAlignment="Center"
-                                   TextTrimming="CharacterEllipsis" MaxWidth="500"/>
-                        <TextBlock x:Name="StatusText" Text="Stopped"
-                                   Foreground="#8888A8" FontSize="11"
-                                   HorizontalAlignment="Center" Margin="0,2,0,0"/>
-                    </StackPanel>
-
-                    <!-- Right: Fullscreen Button -->
-                    <Button x:Name="FullscreenButton" Grid.Column="2"
-                            Content="⛶ Fullscreen"
-                            Padding="12,8" FontSize="12"
-                            Focusable="False"
-                            Click="FullscreenButton_Click"
-                            Background="#3A3A4E"
-                            Foreground="#E0E0F0"
-                            CornerRadius="6"/>
-                </Grid>
-
-                <!-- Row 2: Audio & Subtitle Track Selection -->
-                <Grid Grid.Row="2" ColumnDefinitions="Auto,*,Auto,*">
+            <!-- Track Selection (kept in PlayerPage for now but can be moved later) -->
+            <Border Background="{DynamicResource BgSurface}" Padding="20,0,20,16">
+                <Grid ColumnDefinitions="Auto,*,Auto,*">
                     <!-- Audio Tracks -->
                     <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                        <TextBlock Text="🎵 Audio:" Foreground="#A8A8C8"
+                        <TextBlock Text="🎵 Audio:" Foreground="{DynamicResource TextSecondary}"
                                    FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"/>
                         <WrapPanel x:Name="AudioTracksPanel" VerticalAlignment="Center"/>
                     </StackPanel>
@@ -165,13 +71,12 @@
                     <!-- Subtitle Tracks -->
                     <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8"
                                 VerticalAlignment="Center" Margin="20,0,0,0">
-                        <TextBlock Text="💬 Subtitles:" Foreground="#A8A8C8"
+                        <TextBlock Text="💬 Subtitles:" Foreground="{DynamicResource TextSecondary}"
                                    FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"/>
                         <WrapPanel x:Name="SubtitleTracksPanel" VerticalAlignment="Center"/>
                     </StackPanel>
                 </Grid>
-
-            </Grid>
-        </Border>
+            </Border>
+        </StackPanel>
     </Grid>
 </UserControl>

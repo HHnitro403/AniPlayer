@@ -12,12 +12,13 @@
 
             <!-- Library Folders -->
             <StackPanel Spacing="8">
-                <TextBlock Text="Library Folders" FontSize="16" FontWeight="SemiBold"/>
+                <TextBlock Text="Library Folders" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}"/>
                 <TextBlock Text="Folders that AniPlayer scans for anime."
-                           FontSize="13" Opacity="0.5"/>
+                           FontSize="13" Opacity="0.5" Foreground="{DynamicResource TextPrimary}"/>
                 <StackPanel x:Name="LibraryFoldersList" Spacing="4"/>
                 <Button x:Name="AddLibraryFolderButton"
                         Content="+ Add Folder" Padding="12,8"
+                        Classes="Primary"
                         Click="AddLibraryFolderButton_Click"/>
             </StackPanel>
 
@@ -25,25 +26,25 @@
 
             <!-- Playback -->
             <StackPanel Spacing="8">
-                <TextBlock Text="Playback" FontSize="16" FontWeight="SemiBold"/>
+                <TextBlock Text="Playback" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}"/>
                 <Grid ColumnDefinitions="*,Auto" Margin="0,4">
                     <TextBlock Text="Auto-play next episode"
-                               VerticalAlignment="Center"/>
+                               VerticalAlignment="Center" Foreground="{DynamicResource TextPrimary}"/>
                     <ToggleSwitch x:Name="AutoPlayToggle" Grid.Column="1"
                                   IsChecked="True"/>
                 </Grid>
                 <Grid ColumnDefinitions="*,Auto" Margin="0,4">
                     <TextBlock Text="Remember audio/subtitle track per series"
-                               VerticalAlignment="Center"/>
+                               VerticalAlignment="Center" Foreground="{DynamicResource TextPrimary}"/>
                     <ToggleSwitch x:Name="RememberTracksToggle" Grid.Column="1"
                                   IsChecked="True"/>
                 </Grid>
                 <Grid ColumnDefinitions="*,Auto" Margin="0,4">
                     <StackPanel>
                         <TextBlock Text="Vsync"
-                                   VerticalAlignment="Center"/>
+                                   VerticalAlignment="Center" Foreground="{DynamicResource TextPrimary}"/>
                         <TextBlock Text="Syncs frames to monitor refresh rate. Disable if you experience stuttering."
-                                   FontSize="12" Opacity="0.5"/>
+                                   FontSize="12" Opacity="0.5" Foreground="{DynamicResource TextPrimary}"/>
                     </StackPanel>
                     <ToggleSwitch x:Name="VsyncToggle" Grid.Column="1"
                                   IsChecked="False"/>
@@ -54,12 +55,12 @@
 
             <!-- AniList -->
             <StackPanel Spacing="8">
-                <TextBlock Text="AniList Integration" FontSize="16" FontWeight="SemiBold"/>
+                <TextBlock Text="AniList Integration" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}"/>
                 <TextBlock Text="Fetch metadata (covers, synopses, scores) from AniList."
-                           FontSize="13" Opacity="0.5"/>
+                           FontSize="13" Opacity="0.5" Foreground="{DynamicResource TextPrimary}"/>
                 <Grid ColumnDefinitions="*,Auto" Margin="0,4">
                     <TextBlock Text="Auto-fetch metadata for new series"
-                               VerticalAlignment="Center"/>
+                               VerticalAlignment="Center" Foreground="{DynamicResource TextPrimary}"/>
                     <ToggleSwitch x:Name="AutoFetchToggle" Grid.Column="1"
                                   IsChecked="True"/>
                 </Grid>
@@ -68,61 +69,61 @@
                         Margin="0,4,0,0"
                         Click="FetchAllMetadata_Click"/>
                 <TextBlock x:Name="FetchStatusText"
-                           FontSize="12" Opacity="0.5" Margin="0,2,0,0"/>
+                           FontSize="12" Opacity="0.5" Margin="0,2,0,0" Foreground="{DynamicResource TextPrimary}"/>
             </StackPanel>
 
             <Separator/>
 
             <!-- About -->
             <StackPanel Spacing="4">
-                <TextBlock Text="About" FontSize="16" FontWeight="SemiBold"/>
+                <TextBlock Text="About" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}"/>
                 <TextBlock Text="AniPlayer — Local Anime Media Player"
-                           FontSize="13" Opacity="0.6"/>
+                           FontSize="13" Opacity="0.6" Foreground="{DynamicResource TextPrimary}"/>
                 <TextBlock Text="Built with Avalonia + libmpv"
-                           FontSize="12" Opacity="0.4"/>
+                           FontSize="12" Opacity="0.4" Foreground="{DynamicResource TextPrimary}"/>
             </StackPanel>
             
             <Separator/>
 
             <!-- Developer -->
             <StackPanel Spacing="8">
-                <TextBlock Text="Developer" FontSize="16" FontWeight="SemiBold"/>
+                <TextBlock Text="Developer" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}"/>
                 
                 <Grid ColumnDefinitions="*,Auto" Margin="0,4">
                     <StackPanel>
                         <TextBlock Text="Enable Verbose Logging"
-                                   VerticalAlignment="Center" FontWeight="SemiBold"/>
+                                   VerticalAlignment="Center" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}"/>
                         <TextBlock Text="Enable to see detailed logs. This can impact performance."
-                                   FontSize="12" Opacity="0.5"/>
+                                   FontSize="12" Opacity="0.5" Foreground="{DynamicResource TextPrimary}"/>
                     </StackPanel>
                     <ToggleSwitch x:Name="MasterLogToggle" Grid.Column="1"/>
                 </Grid>
 
                 <StackPanel Margin="16,8,0,0" Spacing="8" IsEnabled="{Binding #MasterLogToggle.IsChecked}">
-                    <TextBlock Text="Log Regions" FontSize="14" FontWeight="SemiBold" Opacity="0.8"/>
+                    <TextBlock Text="Log Regions" FontSize="14" FontWeight="SemiBold" Opacity="0.8" Foreground="{DynamicResource TextPrimary}"/>
                     <Grid ColumnDefinitions="*,Auto">
                         <TextBlock Text="Scanner Logging"
-                                   VerticalAlignment="Center"/>
+                                   VerticalAlignment="Center" Foreground="{DynamicResource TextPrimary}"/>
                         <ToggleSwitch x:Name="ScannerLogToggle" Grid.Column="1"/>
                     </Grid>
                     <Grid ColumnDefinitions="*,Auto">
                         <TextBlock Text="Parser Logging"
-                                   VerticalAlignment="Center"/>
+                                   VerticalAlignment="Center" Foreground="{DynamicResource TextPrimary}"/>
                         <ToggleSwitch x:Name="ParserLogToggle" Grid.Column="1"/>
                     </Grid>
                     <Grid ColumnDefinitions="*,Auto">
                         <TextBlock Text="UI Logging"
-                                   VerticalAlignment="Center"/>
+                                   VerticalAlignment="Center" Foreground="{DynamicResource TextPrimary}"/>
                         <ToggleSwitch x:Name="UiLogToggle" Grid.Column="1"/>
                     </Grid>
                     <Grid ColumnDefinitions="*,Auto">
                         <TextBlock Text="Database Logging"
-                                   VerticalAlignment="Center"/>
+                                   VerticalAlignment="Center" Foreground="{DynamicResource TextPrimary}"/>
                         <ToggleSwitch x:Name="DbLogToggle" Grid.Column="1"/>
                     </Grid>
                     <Grid ColumnDefinitions="*,Auto" Margin="0,4,0,0">
                         <TextBlock Text="Progress Logging"
-                                   VerticalAlignment="Center"/>
+                                   VerticalAlignment="Center" Foreground="{DynamicResource TextPrimary}"/>
                         <ToggleSwitch x:Name="ProgressLogToggle" Grid.Column="1"/>
                     </Grid>
                 </StackPanel>

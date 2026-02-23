@@ -6,17 +6,17 @@
              x:Class="AniPlayer.UI.Sidebar"
              Width="220">
 
-    <Border Background="#0D0D1A" Padding="0,16">
+    <Border Background="{DynamicResource BgBase}" Padding="0,16">
         <DockPanel>
 
             <!-- App title -->
             <StackPanel DockPanel.Dock="Top" Margin="20,0,20,24">
                 <TextBlock Text="AniPlayer"
                            FontSize="20" FontWeight="Bold"
-                           Foreground="#E0E0FF"/>
+                           Foreground="{DynamicResource TextPrimary}"/>
                 <TextBlock Text="Local Anime Player"
                            FontSize="11" Opacity="0.4"
-                           Foreground="#E0E0FF"/>
+                           Foreground="{DynamicResource TextPrimary}"/>
             </StackPanel>
 
             <!-- Settings button pinned to bottom -->
@@ -26,7 +26,7 @@
                     HorizontalContentAlignment="Left"
                     Padding="20,12"
                     Background="Transparent"
-                    Foreground="#AAAACC"
+                    Foreground="{DynamicResource TextSecondary}"
                     Content="Settings"
                     Click="SettingsButton_Click"
                     Margin="8,4"/>
@@ -38,7 +38,7 @@
                         HorizontalContentAlignment="Left"
                         Padding="20,12"
                         Background="Transparent"
-                        Foreground="#E0E0FF"
+                        Foreground="{DynamicResource TextPrimary}"
                         FontWeight="SemiBold"
                         Content="Home"
                         Click="HomeButton_Click"/>
@@ -47,7 +47,7 @@
                         HorizontalContentAlignment="Left"
                         Padding="20,12"
                         Background="Transparent"
-                        Foreground="#AAAACC"
+                        Foreground="{DynamicResource TextSecondary}"
                         Content="Library"
                         Click="LibraryButton_Click"/>
                 <Button x:Name="PlayerButton"
@@ -55,7 +55,7 @@
                         HorizontalContentAlignment="Left"
                         Padding="20,12"
                         Background="Transparent"
-                        Foreground="#AAAACC"
+                        Foreground="{DynamicResource TextSecondary}"
                         Content="Player"
                         Click="PlayerButton_Click"/>
             </StackPanel>
