@@ -69,6 +69,11 @@ public partial class PlayerPage : UserControl
         ProgressSlider.AddHandler(PointerReleasedEvent, OnSliderPointerReleased, RoutingStrategies.Tunnel);
 
         RootGrid.PointerMoved += OnPlayerPointerMoved;
+
+        // Explicitly initialize visibility states to prevent race conditions on first render
+        PlaceholderText.IsVisible = true;
+        SkipOverlayButton.IsVisible = false;
+        ControlsBar.IsVisible = true;
     }
 
     private async void OnAttachedToVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
@@ -232,6 +237,16 @@ public partial class PlayerPage : UserControl
 
     private void FullscreenButton_Click(object? sender, RoutedEventArgs e) => FullscreenToggleRequested?.Invoke();
 
+    private void SeekBackButton_Click(object? sender, RoutedEventArgs e)
+    {
+        SeekRelative(-5);
+    }
+
+    private void SeekForwardButton_Click(object? sender, RoutedEventArgs e)
+    {
+        SeekRelative(5);
+    }
+
     public bool HandleKeyDown(Key key)
     {
         if (_mpvHandle == IntPtr.Zero || !_mpvInitialized || _currentEpisode == null)
@@ -240,8 +255,8 @@ public partial class PlayerPage : UserControl
         switch (key)
         {
             case Key.Space: PlayPauseButton_Click(null, null!); return true;
-            case Key.Left: SeekRelative(-5); return true;
-            case Key.Right: SeekRelative(5); return true;
+            case Key.Left: SeekBackButton_Click(null, null!); return true;  // Trigger button event
+            case Key.Right: SeekForwardButton_Click(null, null!); return true;  // Trigger button event
             case Key.Up: AdjustVolume(10); return true;
             case Key.Down: AdjustVolume(-5); return true;
             case Key.A: CycleAudioTrack(); return true;

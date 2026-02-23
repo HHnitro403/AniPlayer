@@ -22,12 +22,15 @@
                        HorizontalAlignment="Center"
                        VerticalAlignment="Center"
                        TextAlignment="Center"/>
+        </Grid>
 
-            <!-- TODO: Skip button renders behind HWND in fullscreen -->
+        <!-- Overlay Grid for floating UI elements (spans both rows, renders ABOVE HWND region) -->
+        <Grid Grid.RowSpan="2" IsHitTestVisible="False">
             <Button x:Name="SkipOverlayButton"
+                    IsHitTestVisible="True"
                     HorizontalAlignment="Right"
                     VerticalAlignment="Bottom"
-                    Margin="0,0,30,20"
+                    Margin="0,0,30,100"
                     Padding="15,10"
                     Background="#CC000000"
                     Foreground="White"
@@ -59,22 +62,31 @@
                 PointerExited="OnControlsBarPointerExited">
             <Grid RowDefinitions="Auto,Auto,Auto">
 
-                <!-- Row 0: Progress Bar -->
-                <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,20">
-                    <TextBlock x:Name="TimeCurrentText" Text="0:00"
-                               Foreground="#B8B8D0" FontSize="12" FontWeight="Medium"
-                               VerticalAlignment="Center" Margin="0,0,12,0"/>
-                    <Slider x:Name="ProgressSlider" Grid.Column="1"
-                            Minimum="0" Maximum="100" Value="0"
-                            VerticalAlignment="Center"
-                            Height="6"/>
-                    <TextBlock x:Name="TimeTotalText" Text="0:00"
-                               Foreground="#B8B8D0" FontSize="12" FontWeight="Medium"
-                               VerticalAlignment="Center" Margin="12,0,0,0" Grid.Column="2"/>
-                </Grid>
+				<!-- Row 0: Progress Bar -->
+				<Grid ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,28">
+					<TextBlock x:Name="TimeCurrentText" Text="0:00"
+							   Foreground="#B8B8D0" FontSize="12" FontWeight="Medium"
+							   VerticalAlignment="Center" Margin="0,0,12,0"/>
+					<Slider x:Name="ProgressSlider" Grid.Column="1"
+							Minimum="0" Maximum="100" Value="0"
+							VerticalAlignment="Center"
+							Focusable="False">
+						<Slider.Styles>
+							<Style Selector="Slider#ProgressSlider /template/ Border#TrackBackground">
+								<Setter Property="MaxHeight" Value="4"/>
+							</Style>
+							<Style Selector="Slider#ProgressSlider /template/ Border#PART_SelectionRange">
+								<Setter Property="MaxHeight" Value="4"/>
+							</Style>
+						</Slider.Styles>
+					</Slider>
+					<TextBlock x:Name="TimeTotalText" Text="0:00"
+							   Foreground="#B8B8D0" FontSize="12" FontWeight="Medium"
+							   VerticalAlignment="Center" Margin="12,0,0,0" Grid.Column="2"/>
+				</Grid>
 
                 <!-- Row 1: Transport Controls & Now Playing -->
-                <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,16">
+                <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto" Margin="0,8,0,16">
                     <!-- Left: Transport Buttons -->
                     <StackPanel Orientation="Horizontal" Spacing="10">
                         <Button x:Name="PlayPauseButton" Content="▶ Play"
@@ -85,6 +97,22 @@
                                 Foreground="White"
                                 CornerRadius="6"
                                 FontWeight="SemiBold"/>
+                        <Button x:Name="SeekBackButton" Content="⏪ -5s"
+                                Padding="12,8"
+                                Focusable="False"
+                                Click="SeekBackButton_Click"
+                                Background="#3A3A4E"
+                                Foreground="#E0E0F0"
+                                CornerRadius="6"
+                                ToolTip.Tip="Seek backward 5 seconds (Left Arrow)"/>
+                        <Button x:Name="SeekForwardButton" Content="⏩ +5s"
+                                Padding="12,8"
+                                Focusable="False"
+                                Click="SeekForwardButton_Click"
+                                Background="#3A3A4E"
+                                Foreground="#E0E0F0"
+                                CornerRadius="6"
+                                ToolTip.Tip="Seek forward 5 seconds (Right Arrow)"/>
                         <Button x:Name="StopButton" Content="⏹ Stop"
                                 Padding="12,8"
                                 Focusable="False"

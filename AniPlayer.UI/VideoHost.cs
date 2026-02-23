@@ -77,7 +77,11 @@ namespace AniPlayer.UI
             {
                 _lastArrangeWidth = newW;
                 _lastArrangeHeight = newH;
+
+                // Verification: Log actual bounds vs requested size to confirm HWND stays in Row 0
                 Logger.Log($"ArrangeOverride: Resizing child window to {newW}x{newH}");
+                Logger.Log($"  Bounds: {Bounds.Width:F0}x{Bounds.Height:F0}");
+                Logger.Log($"  FinalSize: {finalSize.Width:F0}x{finalSize.Height:F0}");
 
                 if (OperatingSystem.IsWindows())
                 {
@@ -178,20 +182,25 @@ namespace AniPlayer.UI
 
         private const uint WS_CHILD = 0x40000000;
         private const uint WS_VISIBLE = 0x10000000;
+        private const uint WS_CLIPCHILDREN = 0x02000000;
+        private const uint WS_CLIPSIBLINGS = 0x04000000;
         private const int SW_SHOW = 5;
 
         private IntPtr CreateWindowsControl(IPlatformHandle parent)
         {
             Logger.Log("CreateWindowsControl: Creating child window...");
             Logger.Log($"  Parent HWND: {parent.Handle}");
-            Logger.Log($"  Style: WS_CHILD | WS_VISIBLE (0x{(WS_CHILD | WS_VISIBLE).ToString("X")})");
+
+            // WS_CLIPSIBLINGS prevents this window from painting over sibling Avalonia controls
+            var style = WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS;
+            Logger.Log($"  Style: WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS (0x{style:X})");
 
             // Create a child window for video rendering
             var handle = CreateWindowEx(
                 0,
                 "Static",
                 "",
-                WS_CHILD | WS_VISIBLE,
+                style,
                 0, 0,
                 800, 600,
                 parent.Handle,
