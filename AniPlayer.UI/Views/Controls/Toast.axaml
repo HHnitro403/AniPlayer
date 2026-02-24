@@ -1,0 +1,49 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="300" d:DesignHeight="60"
+             x:Class="AniPlayer.UI.Toast"
+             Margin="0,0,0,8"
+             Width="300" HorizontalAlignment="Right">
+
+    <UserControl.Styles>
+        <Style Selector="Border#ToastBorder">
+            <Setter Property="Transitions">
+                <Transitions>
+                    <DoubleTransition Property="Opacity" Duration="0:0:0.3"/>
+                    <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.3" Easing="CubicEaseOut"/>
+                </Transitions>
+            </Setter>
+            <Setter Property="Opacity" Value="0"/>
+            <Setter Property="RenderTransform" Value="translateY(20px)"/>
+        </Style>
+        <Style Selector="Border#ToastBorder.Visible">
+            <Setter Property="Opacity" Value="1"/>
+            <Setter Property="RenderTransform" Value="translateY(0)"/>
+        </Style>
+    </UserControl.Styles>
+
+    <Border x:Name="ToastBorder"
+            Background="{DynamicResource BgElevated}"
+            BorderThickness="0,0,0,0"
+            CornerRadius="{DynamicResource RadiusM}"
+            Padding="16,12"
+            BoxShadow="0 4 12 0 #44000000">
+        <Grid ColumnDefinitions="Auto,*">
+            <Border x:Name="StatusStrip" Grid.Column="0"
+                    Width="4" Height="36"
+                    CornerRadius="2"
+                    Background="{DynamicResource AccentPrimary}"
+                    VerticalAlignment="Center"
+                    Margin="0,0,12,0"/>
+            
+            <TextBlock x:Name="MessageText" Grid.Column="1"
+                       Text="Notification Message"
+                       Foreground="{DynamicResource TextPrimary}"
+                       FontSize="13"
+                       TextWrapping="Wrap"
+                       VerticalAlignment="Center"/>
+        </Grid>
+    </Border>
+</UserControl>

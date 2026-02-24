@@ -73,6 +73,7 @@ public partial class PlayerPage : UserControl
         PlayerControlsControl.NextClicked += NextButton_Click;
         PlayerControlsControl.RewindClicked += (s, e) => SeekBackButton_Click(s, null!);
         PlayerControlsControl.FastForwardClicked += (s, e) => SeekForwardButton_Click(s, null!);
+        PlayerControlsControl.SpeedChanged += (s, speed) => SetOption("speed", speed.ToString("F2", CultureInfo.InvariantCulture));
         PlayerControlsControl.FullscreenClicked += FullscreenButton_Click;
         PlayerControlsControl.Volume.PropertyChanged += (s, e) =>
         {
@@ -389,7 +390,23 @@ public partial class PlayerPage : UserControl
         if (_currentEpisode != null && !string.IsNullOrEmpty(_currentEpisode.ExternalSubtitlePath) && File.Exists(_currentEpisode.ExternalSubtitlePath))
         {
             Logger.Log($"Loading external subtitle: {_currentEpisode.ExternalSubtitlePath}");
-            SetOption("sub-file", _currentEpisode.ExternalSubtitlePath);
+            // Fix: Use 'sub-add' command after delay instead of 'sub-file' option
+            // 'sub-file' is an option for the next file, but we just started loading.
+            _ = Task.Delay(500).ContinueWith(_ =>
+            {
+                if (_mpvHandle != IntPtr.Zero)
+                {
+                    var subCmd = new[]
+                    {
+                        Marshal.StringToHGlobalAnsi("sub-add"),
+                        Marshal.StringToHGlobalAnsi(_currentEpisode.ExternalSubtitlePath),
+                        Marshal.StringToHGlobalAnsi("select"), // auto-select it
+                        IntPtr.Zero
+                    };
+                    LibMpvInterop.mpv_command(_mpvHandle, subCmd);
+                    foreach (var ptr in subCmd) if (ptr != IntPtr.Zero) Marshal.FreeHGlobal(ptr);
+                }
+            }, TaskScheduler.FromCurrentSynchronizationContext());
         }
 
         VideoHostControl.Renderer?.Render();

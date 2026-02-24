@@ -34,5 +34,11 @@
             <ContentControl x:Name="PageHost"/>
         </Border>
 
+        <!-- Toast Notification Layer -->
+        <StackPanel x:Name="ToastContainer" Grid.Column="1"
+                    VerticalAlignment="Bottom" HorizontalAlignment="Right"
+                    Margin="0,0,32,32"
+                    Width="320"/>
+
     </Grid>
 </Window>

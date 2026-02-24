@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
@@ -162,7 +163,13 @@ public partial class OptionsPage : UserControl
         removeBtn.Classes.Add("Danger");
 
         var libId = lib.Id;
-        removeBtn.Click += (_, _) => LibraryRemoveRequested?.Invoke(libId);
+        removeBtn.Click += async (_, _) =>
+        {
+            if (await ShowConfirmDialog("Remove this library? Your watch progress will not be deleted."))
+            {
+                LibraryRemoveRequested?.Invoke(libId);
+            }
+        };
 
         var grid = new Grid
         {
@@ -182,6 +189,77 @@ public partial class OptionsPage : UserControl
         return border;
     }
 
+    private async System.Threading.Tasks.Task<bool> ShowConfirmDialog(string message)
+    {
+        var window = new Window
+        {
+            Title = "Confirm",
+            Width = 400,
+            SizeToContent = SizeToContent.Height,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            CanResize = false,
+            SystemDecorations = SystemDecorations.None,
+            TransparencyLevelHint = new[] { WindowTransparencyLevel.AcrylicBlur, WindowTransparencyLevel.None },
+            Background = Brushes.Transparent,
+            ExtendClientAreaToDecorationsHint = true,
+            ExtendClientAreaChromeHints = Avalonia.Platform.ExtendClientAreaChromeHints.NoChrome,
+            ExtendClientAreaTitleBarHeightHint = -1
+        };
+
+        var stack = new StackPanel { Spacing = 24 };
+        
+        stack.Children.Add(new TextBlock 
+        { 
+            Text = "Confirm Removal", 
+            FontWeight = FontWeight.Bold, 
+            FontSize = 18,
+            Foreground = this.FindResource("TextPrimary") as IBrush 
+        });
+        
+        stack.Children.Add(new TextBlock 
+        { 
+            Text = message, 
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = this.FindResource("TextPrimary") as IBrush,
+            Opacity = 0.9,
+            LineHeight = 22
+        });
+
+        var buttons = new StackPanel 
+        { 
+            Orientation = Orientation.Horizontal, 
+            HorizontalAlignment = HorizontalAlignment.Right, 
+            Spacing = 12
+        };
+
+        var noBtn = new Button { Content = "Cancel", Width = 90, HorizontalContentAlignment = HorizontalAlignment.Center };
+        noBtn.Click += (_, _) => window.Close(false);
+        
+        var yesBtn = new Button { Content = "Remove", Width = 90, HorizontalContentAlignment = HorizontalAlignment.Center };
+        yesBtn.Classes.Add("Danger");
+        yesBtn.Click += (_, _) => window.Close(true);
+
+        buttons.Children.Add(noBtn);
+        buttons.Children.Add(yesBtn);
+        stack.Children.Add(buttons);
+
+        window.Content = new Border 
+        { 
+            Child = stack, 
+            Background = this.FindResource("BgElevated") as IBrush, 
+            BorderBrush = this.FindResource("BorderSubtle") as IBrush, 
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(12),
+            Padding = new Thickness(32),
+            BoxShadow = BoxShadows.Parse("0 12 32 0 #88000000")
+        };
+
+        var topLevel = TopLevel.GetTopLevel(this) as Window;
+        if (topLevel == null) return false;
+
+        return await window.ShowDialog<bool>(topLevel);
+    }
+
     private async void FetchAllMetadata_Click(object? sender, RoutedEventArgs e)
     {
         FetchAllMetadataButton.IsEnabled = false;
@@ -197,6 +275,7 @@ public partial class OptionsPage : UserControl
         {
             Logger.Log($"[OptionsPage] Batch metadata fetch failed: {ex.Message}");
             FetchStatusText.Text = $"Error: {ex.Message}";
+            MainWindow.ShowToast($"Metadata fetch failed: {ex.Message}", true);
         }
         finally
         {

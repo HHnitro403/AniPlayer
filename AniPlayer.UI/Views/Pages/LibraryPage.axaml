@@ -5,65 +5,86 @@
              mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="600"
              x:Class="AniPlayer.UI.LibraryPage">
 
-    <DockPanel>
-        <!-- Header bar -->
-        <Grid DockPanel.Dock="Top" Margin="32,20,32,0" ColumnDefinitions="*,Auto">
-            <StackPanel Orientation="Horizontal" Spacing="16" VerticalAlignment="Center">
-                <TextBlock Text="Library"
-                           FontSize="24" FontWeight="SemiBold"
-                           VerticalAlignment="Center"/>
-                <TextBlock x:Name="SeriesCountText"
-                           Text="0 series"
-                           Opacity="0.5" FontSize="14"
-                           VerticalAlignment="Center"/>
-            </StackPanel>
-
-            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
-                <TextBox x:Name="SearchBox"
-                         Watermark="Search..."
-                         Width="200"
-                         VerticalAlignment="Center"/>
-                <Button x:Name="AddFolderButton"
-                        Content="+ Add Folder"
-                        Classes="Primary"
-                        Padding="12,8"
-                        Click="AddFolderButton_Click"/>
-            </StackPanel>
-        </Grid>
-
-        <!-- Series grid -->
-        <ScrollViewer Margin="32,16,32,0" HorizontalScrollBarVisibility="Disabled">
-            <Panel>
-                <!-- Empty state -->
-                <StackPanel x:Name="EmptyState"
-                            HorizontalAlignment="Center"
-                            VerticalAlignment="Center"
-                            Spacing="12"
-                            Margin="0,100">
-                    <TextBlock x:Name="EmptyStateTitle"
-                               Text="No series in your library"
-                               FontSize="20" FontWeight="SemiBold"
-                               HorizontalAlignment="Center"/>
-                    <TextBlock x:Name="EmptyStateDescription"
-                               Text="Add a folder to start scanning for anime."
-                               FontSize="14" Opacity="0.5"
-                               HorizontalAlignment="Center"/>
-                    <Button Content="Add Your First Folder"
-                            Classes="Primary"
-                            Margin="0,12"
-                            HorizontalAlignment="Center"
-                            Click="AddFolderButton_Click"/>
+    <Grid>
+        <DockPanel>
+            <!-- Header bar -->
+            <Grid DockPanel.Dock="Top" Margin="32,20,32,0" ColumnDefinitions="*,Auto">
+                <StackPanel Orientation="Horizontal" Spacing="16" VerticalAlignment="Center">
+                    <TextBlock Text="Library"
+                               FontSize="24" FontWeight="SemiBold"
+                               VerticalAlignment="Center"/>
+                    <TextBlock x:Name="SeriesCountText"
+                               Text="0 series"
+                               Opacity="0.5" FontSize="14"
+                               VerticalAlignment="Center"/>
                 </StackPanel>
 
-                <!-- Grid of series cards -->
-                <ItemsControl x:Name="SeriesGrid">
-                    <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate>
-                            <WrapPanel Orientation="Horizontal" ItemWidth="180"/>
-                        </ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-                </ItemsControl>
-            </Panel>
-        </ScrollViewer>
-    </DockPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                    <TextBox x:Name="SearchBox"
+                             Watermark="Search..."
+                             Width="200"
+                             VerticalAlignment="Center"/>
+                    <Button x:Name="AddFolderButton"
+                            Content="+ Add Folder"
+                            Classes="Primary"
+                            Padding="12,8"
+                            Focusable="False"
+                            Click="AddFolderButton_Click"/>
+                </StackPanel>
+            </Grid>
+
+            <!-- Series grid -->
+            <ScrollViewer Margin="32,16,32,0" HorizontalScrollBarVisibility="Disabled">
+                <Panel>
+                    <!-- Empty state -->
+                    <StackPanel x:Name="EmptyState"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                Spacing="12"
+                                Margin="0,100">
+                        <TextBlock x:Name="EmptyStateTitle"
+                                   Text="No series in your library"
+                                   FontSize="20" FontWeight="SemiBold"
+                                   HorizontalAlignment="Center"/>
+                        <TextBlock x:Name="EmptyStateDescription"
+                                   Text="Add a folder to start scanning for anime."
+                                   FontSize="14" Opacity="0.5"
+                                   HorizontalAlignment="Center"/>
+                        <Button Content="Add Your First Folder"
+                                Classes="Primary"
+                                Margin="0,12"
+                                HorizontalAlignment="Center"
+                                Click="AddFolderButton_Click"/>
+                    </StackPanel>
+
+                    <!-- Grid of series cards -->
+                    <ItemsControl x:Name="SeriesGrid">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel Orientation="Horizontal" ItemWidth="180"/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                    </ItemsControl>
+                </Panel>
+            </ScrollViewer>
+        </DockPanel>
+
+        <!-- Scan Progress Overlay -->
+        <Border x:Name="ScanOverlay"
+                Background="{DynamicResource BgCard}"
+                BorderBrush="{DynamicResource BorderSubtle}"
+                BorderThickness="1"
+                CornerRadius="{DynamicResource RadiusM}"
+                Padding="16,12"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Bottom"
+                Margin="0,0,0,32"
+                BoxShadow="0 4 12 0 #44000000"
+                IsVisible="False">
+            <StackPanel Orientation="Horizontal" Spacing="12">
+                <ProgressBar IsIndeterminate="True" Width="100" Height="4" VerticalAlignment="Center" Foreground="{DynamicResource AccentPrimary}"/>
+                <TextBlock Text="Scanning library..." VerticalAlignment="Center" Foreground="{DynamicResource TextPrimary}" FontWeight="SemiBold"/>
+            </StackPanel>
+        </Border>
+    </Grid>
 </UserControl>

@@ -15,6 +15,9 @@ public class MetadataService : IMetadataService
     private readonly ILibraryService _library;
     private readonly ILogger<MetadataService> _logger;
     private readonly HttpClient _http;
+    
+    private readonly SemaphoreSlim _semaphore = new(1, 1);
+    private DateTime _lastRequestTime = DateTime.MinValue;
 
     private const string SearchQuery = @"
         query ($search: String) {
@@ -43,8 +46,16 @@ public class MetadataService : IMetadataService
 
     public async Task<AniListMetadata?> SearchAsync(string title, CancellationToken ct = default)
     {
+        await _semaphore.WaitAsync(ct);
         try
         {
+            var elapsed = DateTime.UtcNow - _lastRequestTime;
+            if (elapsed.TotalMilliseconds < 1000)
+            {
+                await Task.Delay(1000 - (int)elapsed.TotalMilliseconds, ct);
+            }
+            _lastRequestTime = DateTime.UtcNow;
+
             var payload = new { query = SearchQuery, variables = new { search = title } };
             var response = await _http.PostAsJsonAsync(AppConstants.AniListEndpoint, payload, ct);
 
@@ -80,6 +91,10 @@ public class MetadataService : IMetadataService
         {
             _logger.LogError(ex, "AniList search failed for '{Title}'", title);
             return null;
+        }
+        finally
+        {
+            _semaphore.Release();
         }
     }
 

@@ -206,6 +206,7 @@ public partial class ShowInfoPage : UserControl
         catch (Exception ex)
         {
             Logger.Log($"[ShowInfoPage] Metadata refresh failed: {ex.Message}", LogRegion.UI);
+            MainWindow.ShowToast($"Refresh failed: {ex.Message}", true);
         }
         finally
         {

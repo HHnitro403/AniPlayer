@@ -13,6 +13,7 @@ public partial class PlayerControls : UserControl
     public event EventHandler? PreviousClicked;
     public event EventHandler? RewindClicked;
     public event EventHandler? FastForwardClicked;
+    public event EventHandler<double>? SpeedChanged;
     public event EventHandler? FullscreenClicked;
     
     public Slider Progress => ProgressSlider;
@@ -28,6 +29,15 @@ public partial class PlayerControls : UserControl
         RewindButton.Click += (s, e) => RewindClicked?.Invoke(this, e);
         FastForwardButton.Click += (s, e) => FastForwardClicked?.Invoke(this, e);
         FullscreenButton.Click += (s, e) => FullscreenClicked?.Invoke(this, e);
+        SpeedSelector.SelectionChanged += (s, e) =>
+        {
+            if (SpeedSelector.SelectedItem is ComboBoxItem item &&
+                item.Tag is string tagStr &&
+                double.TryParse(tagStr, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var speed))
+            {
+                SpeedChanged?.Invoke(this, speed);
+            }
+        };
     }
 
     public void SetPlayState(bool isPlaying)

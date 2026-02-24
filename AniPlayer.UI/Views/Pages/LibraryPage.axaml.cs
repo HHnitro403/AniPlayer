@@ -8,6 +8,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
+using Avalonia.Threading;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -102,6 +103,16 @@ public partial class LibraryPage : UserControl
 
         Logger.Log($"[LibraryPage] ApplyFilter: query='{query}', total={_allSeries.Count}, filtered={filtered.Count}, groups={groups.Count}, cards={cards.Count}", LogRegion.UI);
         Logger.Log($"[LibraryPage] EmptyState.IsVisible={EmptyState.IsVisible}, SeriesGrid.IsVisible={SeriesGrid.IsVisible}", LogRegion.UI);
+    }
+
+    public void ShowScanProgress()
+    {
+        Dispatcher.UIThread.InvokeAsync(() => ScanOverlay.IsVisible = true);
+    }
+
+    public void HideScanProgress()
+    {
+        Dispatcher.UIThread.InvokeAsync(() => ScanOverlay.IsVisible = false);
     }
 
     private async void AddFolderButton_Click(object? sender, RoutedEventArgs e)

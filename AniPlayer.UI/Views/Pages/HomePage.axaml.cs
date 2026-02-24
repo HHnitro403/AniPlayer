@@ -62,6 +62,9 @@ public partial class HomePage : UserControl
             var card = new SeriesCard();
             card.SetData(s);
             card.Clicked += (id) => SeriesSelected?.Invoke(id);
+            // Fix: SeriesCard fires GroupClicked if a group name exists. 
+            // We route this to SeriesSelected(id) which MainWindow handles by looking up the group.
+            card.GroupClicked += (_) => SeriesSelected?.Invoke(s.Id);
             cards.Add(card);
         }
 
