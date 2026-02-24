@@ -1081,7 +1081,15 @@ public partial class PlayerPage : UserControl
         }
 
         if (_mpvHandle != IntPtr.Zero)
-            try { SetOption("command", "stop"); } catch { }
+        {
+            try
+            {
+                var stopCmd = new[] { Marshal.StringToHGlobalAnsi("stop"), IntPtr.Zero };
+                LibMpvInterop.mpv_command(_mpvHandle, stopCmd);
+                Marshal.FreeHGlobal(stopCmd[0]);
+            }
+            catch { }
+        }
 
         _currentEpisode = null;
         PlayerControlsControl.SetNowPlaying("No file loaded", "Stopped");
