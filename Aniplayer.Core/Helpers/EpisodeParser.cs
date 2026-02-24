@@ -172,6 +172,44 @@ public static class EpisodeParser
         return false;
     }
 
+    /// <summary>
+    /// Strips release group tags, quality tags, season suffixes, website URLs, 
+    /// and other common "garbage" from series folder names.
+    /// Used for presentation and as a search query for metadata fetching.
+    /// </summary>
+    public static string CleanSeriesTitle(string rawFolderName)
+    {
+        if (string.IsNullOrWhiteSpace(rawFolderName))
+            return rawFolderName;
+
+        // 1. Strip leading tags: [Group], 【Group】, (Group)
+        var cleaned = Regex.Replace(rawFolderName, @"^(\[.*?\]|【.*?】|\(.*?\))\s*", "");
+
+        // 2. Strip trailing [tag] blocks (quality, hash, checksum, codec, etc.)
+        cleaned = Regex.Replace(cleaned, @"(\s*\[.*?\])+\s*$", "");
+
+        // 3. Strip trailing metadata parenthetical suffixes at end:
+        // (Seasons 1-4 + OVAs + Specials), (Season 1), (S1-S4), (Complete), (Batch), (Dub), (2024)
+        cleaned = Regex.Replace(cleaned, @"\s*\((?:Seasons?\s|S\d|Part|Cour|Complete|Batch|Dual\s?Audio|Multi\s?Subs?|Dub|\d{4}).*\)\s*$",
+            "", RegexOptions.IgnoreCase);
+
+        // 4. Strip trailing Season/Cour/Part suffixes without parentheses:
+        // "Show Season 2", "Show S2", "Show Part 1"
+        cleaned = Regex.Replace(cleaned, @"\s+(?:Season|Part|Cour|S|v)\s*\d+$", "", RegexOptions.IgnoreCase);
+
+        // 5. Strip trailing quality tags without brackets:
+        // "Show 1080p", "Show BD", "Show BluRay"
+        cleaned = Regex.Replace(cleaned, @"\s+(?:\d{3,4}p|BD|BluRay|BDRip|WEB-?DL|WEBRip|x26[45]|HEVC|AVC)\s*$", "", RegexOptions.IgnoreCase);
+
+        // 6. Strip common website URLs or hashes
+        cleaned = Regex.Replace(cleaned, @"\s+[\w-]+\.(?:com|net|org|io|me|tv|cc)\s*$", "", RegexOptions.IgnoreCase);
+
+        // 7. Strip trailing separator + number patterns (e.g. "- 01")
+        cleaned = Regex.Replace(cleaned, @"\s*[-–—]\s*(?:S\d+E\d+|\d+)\s*$", "", RegexOptions.IgnoreCase);
+
+        return cleaned.Trim();
+    }
+
     // ── Fallback regex parsers ──────────────────────────────
 
     private static readonly Regex[] EpisodePatterns =
