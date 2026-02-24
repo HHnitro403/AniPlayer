@@ -5,18 +5,33 @@
             <!-- Colors -->
             <Color x:Key="BgBaseColor">#0D0D1A</Color>
             <Color x:Key="BgSurfaceColor">#12121E</Color>
+            <Color x:Key="BgCardColor">#1A1A2E</Color>
+            <Color x:Key="BgElevatedColor">#22223A</Color>
             <Color x:Key="AccentPrimaryColor">#6C6CFF</Color>
+            <Color x:Key="AccentHoverColor">#8080FF</Color>
+            <Color x:Key="AccentSubtleColor">#2A2A5A</Color>
             <Color x:Key="TextPrimaryColor">#E8E8FF</Color>
-            <Color x:Key="TextSecondaryColor">#A0A0B8</Color>
-            <Color x:Key="DangerColor">#FF4C4C</Color>
+            <Color x:Key="TextSecondaryColor">#9090B0</Color>
+            <Color x:Key="TextMutedColor">#505070</Color>
+            <Color x:Key="BorderSubtleColor">#1E1E35</Color>
+            <Color x:Key="DangerRedColor">#FF4444</Color>
+            <Color x:Key="DangerHoverColor">#FF6666</Color>
 
             <SolidColorBrush x:Key="BgBase" Color="{StaticResource BgBaseColor}" />
             <SolidColorBrush x:Key="BgSurface" Color="{StaticResource BgSurfaceColor}" />
-            <SolidColorBrush x:Key="BgCard" Color="#1E1E30" />
+            <SolidColorBrush x:Key="BgCard" Color="{StaticResource BgCardColor}" />
+            <SolidColorBrush x:Key="BgElevated" Color="{StaticResource BgElevatedColor}" />
             <SolidColorBrush x:Key="AccentPrimary" Color="{StaticResource AccentPrimaryColor}" />
+            <SolidColorBrush x:Key="AccentHover" Color="{StaticResource AccentHoverColor}" />
+            <SolidColorBrush x:Key="AccentSubtle" Color="{StaticResource AccentSubtleColor}" />
             <SolidColorBrush x:Key="TextPrimary" Color="{StaticResource TextPrimaryColor}" />
             <SolidColorBrush x:Key="TextSecondary" Color="{StaticResource TextSecondaryColor}" />
-            <SolidColorBrush x:Key="Danger" Color="{StaticResource DangerColor}" />
+            <SolidColorBrush x:Key="TextMuted" Color="{StaticResource TextMutedColor}" />
+            <SolidColorBrush x:Key="BorderSubtle" Color="{StaticResource BorderSubtleColor}" />
+            <SolidColorBrush x:Key="DangerRed" Color="{StaticResource DangerRedColor}" />
+            <SolidColorBrush x:Key="DangerHover" Color="{StaticResource DangerHoverColor}" />
+            <!-- Alias for backward compatibility if needed, but prefer DangerRed -->
+            <SolidColorBrush x:Key="Danger" Color="{StaticResource DangerRedColor}" />
 
             <!-- Spacing -->
             <x:Double x:Key="SpacingXS">4</x:Double>
@@ -30,13 +45,16 @@
             <CornerRadius x:Key="RadiusS">4</CornerRadius>
             <CornerRadius x:Key="RadiusM">8</CornerRadius>
             <CornerRadius x:Key="RadiusL">12</CornerRadius>
+            <CornerRadius x:Key="RadiusFull">999</CornerRadius>
 
             <!-- Icons -->
             <StreamGeometry x:Key="IconPlay">M8,5.14V19.14L19,12.14L8,5.14Z</StreamGeometry>
-            <StreamGeometry x:Key="IconPause">M14,19H18V5H14M6,19H10V5H6V19Z</StreamGeometry>
+            <StreamGeometry x:Key="IconPause">M14,19H18V5H14M6,19H10V5H6Z</StreamGeometry>
             <StreamGeometry x:Key="IconStop">M18,18H6V6H18V18Z</StreamGeometry>
-            <StreamGeometry x:Key="IconNext">M6,18L14.5,12L6,6M16,6V18H18V6</StreamGeometry>
-            <StreamGeometry x:Key="IconPrevious">M18,6L9.5,12L18,18M8,18V6H6V18</StreamGeometry>
+            <StreamGeometry x:Key="IconNext">M6,18L14,12L6,6V18M14,6V18H16V6H14Z</StreamGeometry>
+            <StreamGeometry x:Key="IconPrevious">M6,18V6H8V18H6M10,18L18,12L10,6V18Z</StreamGeometry>
+            <StreamGeometry x:Key="IconRewind">M11,18V6l-8.5,6 8.5,6zM11.5,12l8.5,6V6l-8.5,6z</StreamGeometry>
+            <StreamGeometry x:Key="IconFastForward">M13,6v12l8.5-6-8.5-6zM4,6v12l8.5-6-8.5-6z</StreamGeometry>
             <StreamGeometry x:Key="IconVolume">M14,3.23V5.29C16.89,6.15 19,8.83 19,12C19,15.17 16.89,17.85 14,18.71V20.77C18.01,19.86 21,16.28 21,12C21,7.72 18.01,4.14 14,3.23M16.5,12C16.5,10.23 15.5,8.71 14,7.97V16.03C15.5,15.29 16.5,13.77 16.5,12M3,9V15H7L12,20V4L7,9H3Z</StreamGeometry>
             <StreamGeometry x:Key="IconFullscreen">M7,14H5V19H10V17H7V14M5,10H7V7H10V5H5V10M17,14V17H14V19H19V14H17M14,5V7H17V10H19V5H14Z</StreamGeometry>
             

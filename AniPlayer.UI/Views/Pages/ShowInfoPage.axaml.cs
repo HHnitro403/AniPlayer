@@ -111,8 +111,8 @@ public partial class ShowInfoPage : UserControl
                     Padding = new Thickness(8, 4),
                     Margin = new Thickness(0, 0, 6, 6),
                     CornerRadius = new CornerRadius(4),
-                    Background = new SolidColorBrush(Color.FromArgb(30, 255, 255, 255)),
-                    Child = new TextBlock { Text = genre, FontSize = 12 },
+                    Background = new SolidColorBrush(Color.Parse("#2A2A5A")), // AccentSubtle
+                    Child = new TextBlock { Text = genre, FontSize = 12, Foreground = Brushes.White },
                 });
             }
         }

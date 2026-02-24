@@ -1,0 +1,87 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="190" d:DesignHeight="200"
+             x:Class="AniPlayer.UI.ContinueWatchingCard"
+             Margin="6" Cursor="Hand">
+
+    <UserControl.Styles>
+        <Style Selector="Border#MainBorder">
+            <Setter Property="Transitions">
+                <Transitions>
+                    <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.15" Easing="CubicEaseOut"/>
+                    <BoxShadowsTransition Property="BoxShadow" Duration="0:0:0.15"/>
+                </Transitions>
+            </Setter>
+            <Setter Property="BoxShadow" Value="0 2 4 0 #20000000"/>
+        </Style>
+        <Style Selector="Border#MainBorder:pointerover">
+            <Setter Property="RenderTransform" Value="scale(1.03)"/>
+            <Setter Property="BoxShadow" Value="0 8 24 0 #66000000"/>
+        </Style>
+    </UserControl.Styles>
+
+    <Border x:Name="MainBorder" 
+            Width="190"
+            Background="{DynamicResource BgCard}"
+            CornerRadius="{DynamicResource RadiusM}"
+            ClipToBounds="True">
+        <StackPanel>
+            <!-- Cover / Thumbnail Area -->
+            <Panel Height="120">
+                <Image x:Name="CoverImage" Stretch="UniformToFill"/>
+                
+                <!-- Fallback -->
+                <Border Background="{DynamicResource BgElevated}" 
+                        IsVisible="{Binding #CoverImage.Source, Converter={x:Static ObjectConverters.IsNull}}">
+                    <TextBlock Text="?" 
+                               Foreground="{DynamicResource TextMuted}" 
+                               FontSize="32" 
+                               HorizontalAlignment="Center" 
+                               VerticalAlignment="Center" 
+                               Opacity="0.3"/>
+                </Border>
+                
+                <!-- Time Remaining Badge -->
+                <Border Background="{DynamicResource BgElevated}"
+                        CornerRadius="{DynamicResource RadiusS}"
+                        Padding="6,2"
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Top"
+                        Margin="8">
+                    <TextBlock x:Name="TimeRemainingText"
+                               Text="12m left"
+                               FontSize="10"
+                               FontWeight="Bold"
+                               Foreground="{DynamicResource TextPrimary}"/>
+                </Border>
+                
+                <!-- Progress Bar Overlay (Bottom of image) -->
+                <ProgressBar x:Name="ProgressBar"
+                             VerticalAlignment="Bottom"
+                             Height="4"
+                             Minimum="0" Maximum="100" Value="0"
+                             Foreground="{DynamicResource AccentPrimary}"
+                             Background="#40000000"
+                             CornerRadius="0"/>
+            </Panel>
+            
+            <!-- Text Content -->
+            <StackPanel Margin="10,8,10,12" Spacing="2">
+                <TextBlock x:Name="EpisodeTitleText"
+                           Text="Episode Title"
+                           FontSize="12"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextPrimary}"
+                           TextTrimming="CharacterEllipsis"/>
+                
+                <TextBlock x:Name="SeriesTitleText"
+                           Text="Series Name"
+                           FontSize="11"
+                           Foreground="{DynamicResource TextMuted}"
+                           TextTrimming="CharacterEllipsis"/>
+            </StackPanel>
+        </StackPanel>
+    </Border>
+</UserControl>

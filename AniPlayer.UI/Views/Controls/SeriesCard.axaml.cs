@@ -41,21 +41,7 @@ public partial class SeriesCard : UserControl
             SeasonsBadge.IsVisible = false;
         }
 
-        WatchProgressBar.IsVisible = false;
         LoadCover(series.CoverImagePath);
-    }
-
-    public void SetContinueWatchingData(Episode episode, WatchProgress progress, Series? series)
-    {
-        SeriesId = episode.Id; // Using episode ID for click event in continue watching
-        TitleText.Text = episode.DisplayName;
-        SubtitleText.Text = series?.DisplayTitle ?? "";
-        
-        SeasonsBadge.IsVisible = false;
-        WatchProgressBar.IsVisible = true;
-        WatchProgressBar.Value = progress.ProgressPercent * 100;
-        
-        LoadCover(series?.CoverImagePath);
     }
 
     private void LoadCover(string? coverPath)

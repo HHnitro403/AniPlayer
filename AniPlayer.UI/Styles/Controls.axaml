@@ -1,82 +1,180 @@
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
-    <!-- Button Base Style -->
+    <!-- === BUTTON === -->
     <Style Selector="Button">
-        <Setter Property="Background" Value="#33FFFFFF" />
+        <Setter Property="Background" Value="{DynamicResource BgElevated}" />
         <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+        <Setter Property="BorderBrush" Value="Transparent" />
         <Setter Property="Padding" Value="12,8" />
         <Setter Property="CornerRadius" Value="{DynamicResource RadiusS}" />
         <Setter Property="FontSize" Value="14" />
         <Setter Property="FontWeight" Value="Medium" />
         <Setter Property="Transitions">
             <Transitions>
-                <BrushTransition Property="Background" Duration="0:0:0.1" />
+                <BrushTransition Property="Background" Duration="0:0:0.15" />
                 <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.1" />
             </Transitions>
         </Setter>
     </Style>
 
+    <!-- Hover state -->
     <Style Selector="Button:pointerover /template/ ContentPresenter">
-        <Setter Property="Background" Value="#44FFFFFF" />
+        <Setter Property="Background" Value="{DynamicResource AccentSubtle}" />
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
     </Style>
-
+    
+    <!-- Pressed state -->
     <Style Selector="Button:pressed">
         <Setter Property="RenderTransform" Value="scale(0.98)" />
     </Style>
+    
+    <!-- Disabled state -->
+    <Style Selector="Button:disabled">
+        <Setter Property="Opacity" Value="0.4" />
+    </Style>
 
+    <!-- === BUTTON VARIANTS === -->
+    
     <!-- Primary Button -->
     <Style Selector="Button.Primary">
         <Setter Property="Background" Value="{DynamicResource AccentPrimary}" />
         <Setter Property="Foreground" Value="White" />
+        <Setter Property="FontWeight" Value="SemiBold" />
     </Style>
 
     <Style Selector="Button.Primary:pointerover /template/ ContentPresenter">
-        <Setter Property="Background" Value="#7E7EFF" />
+        <Setter Property="Background" Value="{DynamicResource AccentHover}" />
         <Setter Property="Foreground" Value="White" />
     </Style>
 
     <!-- Danger Button -->
     <Style Selector="Button.Danger">
-        <Setter Property="Background" Value="{DynamicResource Danger}" />
+        <Setter Property="Background" Value="{DynamicResource DangerRed}" />
         <Setter Property="Foreground" Value="White" />
     </Style>
 
     <Style Selector="Button.Danger:pointerover /template/ ContentPresenter">
-        <Setter Property="Background" Value="#FF6666" />
+        <Setter Property="Background" Value="{DynamicResource DangerHover}" />
         <Setter Property="Foreground" Value="White" />
     </Style>
-
-    <!-- TextBox Style -->
-    <Style Selector="TextBox">
-        <Setter Property="Background" Value="{DynamicResource BgBase}" />
+    
+    <!-- Outlined Button (Added as per Task 9 requirement for polish) -->
+    <Style Selector="Button.Outlined">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="{DynamicResource AccentPrimary}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Foreground" Value="{DynamicResource AccentPrimary}" />
+    </Style>
+    
+    <Style Selector="Button.Outlined:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource AccentSubtle}" />
         <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
-        <Setter Property="BorderBrush" Value="#22FFFFFF" />
+        <Setter Property="BorderBrush" Value="{DynamicResource AccentPrimary}" />
+    </Style>
+
+    <!-- === TEXTBOX === -->
+    <Style Selector="TextBox">
+        <Setter Property="Background" Value="{DynamicResource BgCard}" />
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtle}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="CornerRadius" Value="{DynamicResource RadiusS}" />
         <Setter Property="Padding" Value="12,8" />
+        <Setter Property="CaretBrush" Value="{DynamicResource AccentPrimary}" />
     </Style>
 
     <Style Selector="TextBox:focus /template/ Border#PART_BorderElement">
         <Setter Property="BorderBrush" Value="{DynamicResource AccentPrimary}" />
         <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="Background" Value="{DynamicResource BgBase}" />
+        <Setter Property="Background" Value="{DynamicResource BgCard}" />
     </Style>
-
-    <!-- Slider Style -->
+    
+    <!-- === SLIDER === -->
     <Style Selector="Slider">
-        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Foreground" Value="{DynamicResource AccentPrimary}"/>
     </Style>
-
-    <Style Selector="Slider /template/ RepeatButton#PART_DecreaseButton">
-        <Setter Property="Background" Value="{DynamicResource AccentPrimary}" />
+    
+    <!-- Track -->
+    <Style Selector="Slider /template/ Track">
+        <Setter Property="Minimum" Value="{TemplateBinding Minimum}"/>
+        <Setter Property="Maximum" Value="{TemplateBinding Maximum}"/>
+        <Setter Property="Orientation" Value="{TemplateBinding Orientation}"/>
     </Style>
-
+    
+    <Style Selector="Slider:horizontal /template/ RepeatButton#PART_DecreaseButton">
+        <Setter Property="Background" Value="{DynamicResource AccentPrimary}"/>
+        <Setter Property="Height" Value="4"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+    
+    <Style Selector="Slider:horizontal /template/ RepeatButton#PART_IncreaseButton">
+        <Setter Property="Background" Value="{DynamicResource BgElevated}"/>
+        <Setter Property="Height" Value="4"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+    
+    <!-- Thumb (hidden by default) -->
     <Style Selector="Slider /template/ Thumb">
-        <Setter Property="Background" Value="White" />
-        <Setter Property="Width" Value="12" />
-        <Setter Property="Height" Value="12" />
-        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="Width" Value="0"/>
+        <Setter Property="Height" Value="0"/>
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="CornerRadius" Value="99"/>
+        <Setter Property="Transitions">
+            <Transitions>
+                <DoubleTransition Property="Width" Duration="0:0:0.1"/>
+                <DoubleTransition Property="Height" Duration="0:0:0.1"/>
+                <BrushTransition Property="Background" Duration="0:0:0.1"/>
+            </Transitions>
+        </Setter>
+    </Style>
+    
+    <!-- Thumb visible on hover/focus -->
+    <Style Selector="Slider:pointerover /template/ Thumb">
+        <Setter Property="Width" Value="12"/>
+        <Setter Property="Height" Value="12"/>
+        <Setter Property="Background" Value="{DynamicResource AccentHover}"/>
+    </Style>
+    
+    <Style Selector="Slider:focus /template/ Thumb">
+        <Setter Property="Width" Value="12"/>
+        <Setter Property="Height" Value="12"/>
+        <Setter Property="Background" Value="{DynamicResource AccentHover}"/>
+    </Style>
+
+    <!-- === SCROLLBAR === -->
+    <Style Selector="ScrollBar">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Width" Value="6"/>
+    </Style>
+    
+    <Style Selector="ScrollBar /template/ Border#TrackRect">
+        <Setter Property="Background" Value="{DynamicResource BgElevated}"/>
+    </Style>
+    
+    <Style Selector="ScrollBar /template/ Thumb">
+        <Setter Property="Background" Value="{DynamicResource TextMuted}"/>
+        <Setter Property="CornerRadius" Value="3"/>
+    </Style>
+    
+    <!-- Only visible on hover container? Or scrollbar hover? 
+         Avalonia ScrollViewer usually handles auto-hide. 
+         Here we just style the bar itself to be thin. -->
+    <Style Selector="ScrollBar:pointerover /template/ Thumb">
+        <Setter Property="Background" Value="{DynamicResource TextSecondary}"/>
+    </Style>
+
+    <!-- === TOGGLESWITCH === -->
+    <Style Selector="ToggleSwitch:checked /template/ Border#SwitchKnobBounds">
+        <Setter Property="Background" Value="{DynamicResource AccentPrimary}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource AccentPrimary}"/>
+    </Style>
+    <Style Selector="ToggleSwitch:checked /template/ Border#SwitchKnob">
+        <Setter Property="Background" Value="White"/>
+    </Style>
+    <Style Selector="ToggleSwitch:checked /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource AccentPrimary}"/>
     </Style>
 
 </Styles>

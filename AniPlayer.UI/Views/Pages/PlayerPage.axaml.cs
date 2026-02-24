@@ -71,6 +71,8 @@ public partial class PlayerPage : UserControl
         PlayerControlsControl.PlayPauseClicked += PlayPauseButton_Click;
         PlayerControlsControl.StopClicked += StopButton_Click;
         PlayerControlsControl.NextClicked += NextButton_Click;
+        PlayerControlsControl.RewindClicked += (s, e) => SeekBackButton_Click(s, null!);
+        PlayerControlsControl.FastForwardClicked += (s, e) => SeekForwardButton_Click(s, null!);
         PlayerControlsControl.FullscreenClicked += FullscreenButton_Click;
         PlayerControlsControl.Volume.PropertyChanged += (s, e) =>
         {

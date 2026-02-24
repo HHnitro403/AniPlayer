@@ -14,11 +14,13 @@
 
             <!-- Navigation -->
             <StackPanel Orientation="Horizontal" Spacing="8">
-                <Button x:Name="BackButton" Content="Back"
-                        Padding="12,6"
+                <Button x:Name="BackButton" Content="◀ Back"
+                        Padding="16,8"
+                        Classes="Primary"
                         Click="BackButton_Click"/>
                 <Button x:Name="RefreshMetadataButton" Content="Refresh Metadata"
-                        Padding="12,6"
+                        Padding="16,8"
+                        Classes="Outlined"
                         IsVisible="False"
                         Click="RefreshMetadata_Click"/>
             </StackPanel>
@@ -26,9 +28,10 @@
             <!-- Header: cover + info -->
             <Grid ColumnDefinitions="180,*" MinHeight="260">
                 <!-- Cover image placeholder -->
-                <Border Background="{DynamicResource BgBase}" CornerRadius="{DynamicResource RadiusM}"
+                <Border Background="{DynamicResource BgElevated}" CornerRadius="{DynamicResource RadiusM}"
                         Width="170" Height="240"
-                        VerticalAlignment="Top">
+                        VerticalAlignment="Top"
+                        BoxShadow="0 8 24 0 #66000000">
                     <Panel>
                         <Image x:Name="CoverImage" Stretch="UniformToFill"/>
                         <TextBlock x:Name="CoverPlaceholder"
@@ -59,13 +62,17 @@
                         <TextBlock x:Name="ScoreText" FontSize="13" Opacity="0.7"
                                    Foreground="{DynamicResource TextPrimary}"/>
                     </StackPanel>
+                    
+                    <!-- Genres Panel - Items added in code-behind, but style controlled here? No, code-behind creates Borders. -->
                     <WrapPanel x:Name="GenresPanel" Margin="0,8,0,0"/>
+                    
                     <TextBlock x:Name="SynopsisText"
-                               FontSize="14" Opacity="0.8"
+                               FontSize="14" Opacity="1.0"
                                TextWrapping="Wrap"
                                MaxHeight="120"
                                Margin="0,8,0,0"
-                               Foreground="{DynamicResource TextPrimary}"/>
+                               LineHeight="22"
+                               Foreground="{DynamicResource TextSecondary}"/>
                 </StackPanel>
             </Grid>
 

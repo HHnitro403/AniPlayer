@@ -5,6 +5,20 @@
              mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="600"
              x:Class="AniPlayer.UI.OptionsPage">
 
+    <UserControl.Styles>
+        <Style Selector="Border.LibraryRow">
+            <Setter Property="Background" Value="{DynamicResource BgCard}"/>
+            <Setter Property="Transitions">
+                <Transitions>
+                    <BrushTransition Property="Background" Duration="0:0:0.1"/>
+                </Transitions>
+            </Setter>
+        </Style>
+        <Style Selector="Border.LibraryRow:pointerover">
+            <Setter Property="Background" Value="{DynamicResource BgElevated}"/>
+        </Style>
+    </UserControl.Styles>
+
     <ScrollViewer HorizontalScrollBarVisibility="Disabled">
         <StackPanel Margin="32,24" Spacing="28" MaxWidth="700">
 
@@ -12,7 +26,10 @@
 
             <!-- Library Folders -->
             <StackPanel Spacing="8">
-                <TextBlock Text="Library Folders" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}"/>
+                <StackPanel Spacing="4">
+                    <TextBlock Text="Library Folders" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}"/>
+                    <Border Height="1" Background="{DynamicResource BorderSubtle}"/>
+                </StackPanel>
                 <TextBlock Text="Folders that AniPlayer scans for anime."
                            FontSize="13" Opacity="0.5" Foreground="{DynamicResource TextPrimary}"/>
                 <StackPanel x:Name="LibraryFoldersList" Spacing="4"/>
@@ -26,7 +43,10 @@
 
             <!-- Playback -->
             <StackPanel Spacing="8">
-                <TextBlock Text="Playback" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}"/>
+                <StackPanel Spacing="4">
+                    <TextBlock Text="Playback" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}"/>
+                    <Border Height="1" Background="{DynamicResource BorderSubtle}"/>
+                </StackPanel>
                 <Grid ColumnDefinitions="*,Auto" Margin="0,4">
                     <TextBlock Text="Auto-play next episode"
                                VerticalAlignment="Center" Foreground="{DynamicResource TextPrimary}"/>
@@ -55,7 +75,10 @@
 
             <!-- AniList -->
             <StackPanel Spacing="8">
-                <TextBlock Text="AniList Integration" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}"/>
+                <StackPanel Spacing="4">
+                    <TextBlock Text="AniList Integration" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}"/>
+                    <Border Height="1" Background="{DynamicResource BorderSubtle}"/>
+                </StackPanel>
                 <TextBlock Text="Fetch metadata (covers, synopses, scores) from AniList."
                            FontSize="13" Opacity="0.5" Foreground="{DynamicResource TextPrimary}"/>
                 <Grid ColumnDefinitions="*,Auto" Margin="0,4">
@@ -67,6 +90,7 @@
                 <Button x:Name="FetchAllMetadataButton"
                         Content="Fetch All Missing Metadata" Padding="12,8"
                         Margin="0,4,0,0"
+                        Classes="Primary"
                         Click="FetchAllMetadata_Click"/>
                 <TextBlock x:Name="FetchStatusText"
                            FontSize="12" Opacity="0.5" Margin="0,2,0,0" Foreground="{DynamicResource TextPrimary}"/>
@@ -76,7 +100,10 @@
 
             <!-- About -->
             <StackPanel Spacing="4">
-                <TextBlock Text="About" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}"/>
+                <StackPanel Spacing="4">
+                    <TextBlock Text="About" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}"/>
+                    <Border Height="1" Background="{DynamicResource BorderSubtle}"/>
+                </StackPanel>
                 <TextBlock Text="AniPlayer — Local Anime Media Player"
                            FontSize="13" Opacity="0.6" Foreground="{DynamicResource TextPrimary}"/>
                 <TextBlock Text="Built with Avalonia + libmpv"
@@ -87,7 +114,10 @@
 
             <!-- Developer -->
             <StackPanel Spacing="8">
-                <TextBlock Text="Developer" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}"/>
+                <StackPanel Spacing="4">
+                    <TextBlock Text="Developer" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}"/>
+                    <Border Height="1" Background="{DynamicResource BorderSubtle}"/>
+                </StackPanel>
                 
                 <Grid ColumnDefinitions="*,Auto" Margin="0,4">
                     <StackPanel>

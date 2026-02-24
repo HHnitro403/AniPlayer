@@ -159,6 +159,7 @@ public partial class OptionsPage : UserControl
             VerticalAlignment = VerticalAlignment.Center,
             Padding = new Avalonia.Thickness(8, 4),
         };
+        removeBtn.Classes.Add("Danger");
 
         var libId = lib.Id;
         removeBtn.Click += (_, _) => LibraryRemoveRequested?.Invoke(libId);
@@ -171,13 +172,14 @@ public partial class OptionsPage : UserControl
         Grid.SetColumn(removeBtn, 1);
         grid.Children.Add(removeBtn);
 
-        return new Border
+        var border = new Border
         {
             Padding = new Avalonia.Thickness(12, 8),
             CornerRadius = new Avalonia.CornerRadius(6),
-            Background = new SolidColorBrush(Color.FromArgb(30, 255, 255, 255)),
             Child = grid,
         };
+        border.Classes.Add("LibraryRow");
+        return border;
     }
 
     private async void FetchAllMetadata_Click(object? sender, RoutedEventArgs e)

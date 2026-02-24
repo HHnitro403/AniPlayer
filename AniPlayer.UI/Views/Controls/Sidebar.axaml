@@ -3,59 +3,80 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="220" d:DesignHeight="600"
-             x:Class="AniPlayer.UI.Sidebar"
-             Width="220">
+             x:Class="AniPlayer.UI.Sidebar">
 
-    <Border Background="{DynamicResource BgBase}" Padding="0,16">
+    <UserControl.Styles>
+        <Style Selector="Button.NavButton">
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="Padding" Value="16,10"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="FontWeight" Value="Normal"/>
+            <Setter Property="Transitions">
+                <Transitions>
+                    <BrushTransition Property="Background" Duration="0:0:0.15"/>
+                    <BrushTransition Property="Foreground" Duration="0:0:0.15"/>
+                </Transitions>
+            </Setter>
+        </Style>
+        
+        <Style Selector="Button.NavButton:pointerover">
+            <Setter Property="Background" Value="{DynamicResource AccentSubtle}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
+        </Style>
+        
+        <Style Selector="Button.NavButton.NavActive">
+            <Setter Property="Background" Value="{DynamicResource BgElevated}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="BorderThickness" Value="3,0,0,0"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentPrimary}"/>
+            <Setter Property="CornerRadius" Value="0,6,6,0"/>
+        </Style>
+    </UserControl.Styles>
+
+    <Border Background="{DynamicResource BgBase}" Padding="0,0,16,16">
         <DockPanel>
 
             <!-- App title -->
-            <StackPanel DockPanel.Dock="Top" Margin="20,0,20,24">
-                <TextBlock Text="AniPlayer"
-                           FontSize="20" FontWeight="Bold"
-                           Foreground="{DynamicResource TextPrimary}"/>
-                <TextBlock Text="Local Anime Player"
-                           FontSize="11" Opacity="0.4"
-                           Foreground="{DynamicResource TextPrimary}"/>
+            <StackPanel DockPanel.Dock="Top" Margin="24,24,20,24" Orientation="Horizontal" Spacing="10">
+                <!-- Accent Dot/Bar -->
+                <Border Width="4" Height="20" CornerRadius="{DynamicResource RadiusS}" Background="{DynamicResource AccentPrimary}"/>
+                
+                <StackPanel>
+                    <TextBlock Text="AniPlayer"
+                               FontSize="20" FontWeight="Bold"
+                               Foreground="{DynamicResource TextPrimary}"/>
+                    <TextBlock Text="Local Anime Player"
+                               FontSize="11" Opacity="0.4"
+                               Foreground="{DynamicResource TextPrimary}"/>
+                </StackPanel>
             </StackPanel>
 
             <!-- Settings button pinned to bottom -->
-            <Button x:Name="SettingsButton"
-                    DockPanel.Dock="Bottom"
-                    HorizontalAlignment="Stretch"
-                    HorizontalContentAlignment="Left"
-                    Padding="20,12"
-                    Background="Transparent"
-                    Foreground="{DynamicResource TextSecondary}"
-                    Content="Settings"
-                    Click="SettingsButton_Click"
-                    Margin="8,4"/>
+            <StackPanel DockPanel.Dock="Bottom">
+                <Border Height="1" Background="{DynamicResource BorderSubtle}" Margin="16,8"/>
+                <Button x:Name="SettingsButton"
+                        Classes="NavButton"
+                        Content="Settings"
+                        Click="SettingsButton_Click"
+                        Margin="16,4,0,4"/>
+            </StackPanel>
 
             <!-- Nav buttons -->
-            <StackPanel Spacing="2" Margin="8,0">
+            <StackPanel Spacing="4" Margin="16,12,0,12">
                 <Button x:Name="HomeButton"
-                        HorizontalAlignment="Stretch"
-                        HorizontalContentAlignment="Left"
-                        Padding="20,12"
-                        Background="Transparent"
-                        Foreground="{DynamicResource TextPrimary}"
-                        FontWeight="SemiBold"
+                        Classes="NavButton NavActive"
                         Content="Home"
                         Click="HomeButton_Click"/>
                 <Button x:Name="LibraryButton"
-                        HorizontalAlignment="Stretch"
-                        HorizontalContentAlignment="Left"
-                        Padding="20,12"
-                        Background="Transparent"
-                        Foreground="{DynamicResource TextSecondary}"
+                        Classes="NavButton"
                         Content="Library"
                         Click="LibraryButton_Click"/>
                 <Button x:Name="PlayerButton"
-                        HorizontalAlignment="Stretch"
-                        HorizontalContentAlignment="Left"
-                        Padding="20,12"
-                        Background="Transparent"
-                        Foreground="{DynamicResource TextSecondary}"
+                        Classes="NavButton"
                         Content="Player"
                         Click="PlayerButton_Click"/>
             </StackPanel>

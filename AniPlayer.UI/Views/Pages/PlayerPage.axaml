@@ -32,15 +32,16 @@
                     VerticalAlignment="Bottom"
                     Margin="0,0,30,100"
                     Padding="15,10"
-                    Background="#CC0D0D1A"
-                    Foreground="White"
+                    Background="{DynamicResource BgElevated}"
+                    Opacity="0.9"
+                    Foreground="{DynamicResource TextPrimary}"
                     CornerRadius="5"
                     Focusable="False"
                     IsVisible="False"
                     Click="OnSkipButtonClick">
                 <Button.Styles>
                     <Style Selector="Button:pointerover /template/ ContentPresenter">
-                        <Setter Property="Background" Value="#E612121E"/>
+                        <Setter Property="Background" Value="{DynamicResource BgSurface}"/>
                         <Setter Property="Foreground" Value="{DynamicResource AccentPrimary}"/>
                     </Style>
                 </Button.Styles>

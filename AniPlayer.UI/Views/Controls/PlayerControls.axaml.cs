@@ -11,6 +11,8 @@ public partial class PlayerControls : UserControl
     public event EventHandler? StopClicked;
     public event EventHandler? NextClicked;
     public event EventHandler? PreviousClicked;
+    public event EventHandler? RewindClicked;
+    public event EventHandler? FastForwardClicked;
     public event EventHandler? FullscreenClicked;
     
     public Slider Progress => ProgressSlider;
@@ -23,6 +25,8 @@ public partial class PlayerControls : UserControl
         StopButton.Click += (s, e) => StopClicked?.Invoke(this, e);
         NextButton.Click += (s, e) => NextClicked?.Invoke(this, e);
         PreviousButton.Click += (s, e) => PreviousClicked?.Invoke(this, e);
+        RewindButton.Click += (s, e) => RewindClicked?.Invoke(this, e);
+        FastForwardButton.Click += (s, e) => FastForwardClicked?.Invoke(this, e);
         FullscreenButton.Click += (s, e) => FullscreenClicked?.Invoke(this, e);
     }
 

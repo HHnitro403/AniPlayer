@@ -4,76 +4,96 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="160" d:DesignHeight="280"
              x:Class="AniPlayer.UI.SeriesCard"
-             Margin="4" Cursor="Hand">
+             Margin="6" Cursor="Hand">
 
     <UserControl.Styles>
         <Style Selector="Border#MainBorder">
             <Setter Property="Transitions">
                 <Transitions>
                     <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.2" Easing="CubicEaseOut"/>
+                    <BrushTransition Property="BorderBrush" Duration="0:0:0.2"/>
+                    <BoxShadowsTransition Property="BoxShadow" Duration="0:0:0.2"/>
                 </Transitions>
             </Setter>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="BoxShadow" Value="0 0 0 0 #00000000"/>
         </Style>
         <Style Selector="Border#MainBorder:pointerover">
-            <Setter Property="RenderTransform" Value="scale(1.05)"/>
+            <Setter Property="RenderTransform" Value="scale(1.03)"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentPrimary}"/>
+            <Setter Property="BoxShadow" Value="0 8 24 0 #66000000"/>
         </Style>
     </UserControl.Styles>
 
-    <Border x:Name="MainBorder" CornerRadius="{DynamicResource RadiusM}" ClipToBounds="False"
-            Width="155" Background="{DynamicResource BgCard}" Padding="8">
-        <StackPanel Spacing="6">
-            <!-- Cover image -->
-            <Border Height="210" Background="{DynamicResource BgBase}" CornerRadius="{DynamicResource RadiusS}"
-                    ClipToBounds="True">
-                <Panel>
-                    <Image x:Name="CoverImage" Stretch="UniformToFill"/>
-                    <TextBlock x:Name="CoverPlaceholder"
+    <Border x:Name="MainBorder" 
+            CornerRadius="{DynamicResource RadiusM}" 
+            ClipToBounds="True"
+            HorizontalAlignment="Stretch"
+            Background="{DynamicResource BgCard}">
+        
+        <Grid>
+            <!-- Cover image container -->
+            <Panel Height="240">
+                <Image x:Name="CoverImage" Stretch="UniformToFill"/>
+                
+                <!-- Fallback placeholder -->
+                <Border Background="{DynamicResource BgElevated}" IsVisible="{Binding #CoverImage.Source, Converter={x:Static ObjectConverters.IsNull}}">
+                     <TextBlock x:Name="CoverPlaceholder"
                                Text="?"
-                               Foreground="{DynamicResource TextSecondary}" FontSize="36" Opacity="0.3"
+                               Foreground="{DynamicResource TextSecondary}" FontSize="48" Opacity="0.1"
                                HorizontalAlignment="Center"
                                VerticalAlignment="Center"/>
+                </Border>
+                
+                <!-- Gradient Overlay for text readability -->
+                <Border VerticalAlignment="Bottom" Height="120">
+                    <Border.Background>
+                        <LinearGradientBrush StartPoint="50%,0%" EndPoint="50%,100%">
+                            <GradientStop Color="#00000000" Offset="0"/>
+                            <GradientStop Color="#CC000000" Offset="1"/>
+                        </LinearGradientBrush>
+                    </Border.Background>
+                </Border>
 
-                    <!-- Seasons badge overlay -->
-                    <Border x:Name="SeasonsBadge"
-                            Background="{DynamicResource AccentPrimary}"
-                            CornerRadius="0,0,0,8"
-                            Padding="8,4"
-                            HorizontalAlignment="Right"
-                            VerticalAlignment="Top"
-                            IsVisible="False">
-                        <TextBlock x:Name="SeasonsText"
-                                   Text="2 Seasons"
-                                   FontSize="10" FontWeight="Bold"
-                                   Foreground="White"/>
-                    </Border>
-                    
-                    <!-- Progress bar overlay (for Continue Watching) -->
-                    <ProgressBar x:Name="WatchProgressBar"
-                                 VerticalAlignment="Bottom"
-                                 Height="4"
-                                 Minimum="0" Maximum="100" Value="50"
-                                 Foreground="{DynamicResource AccentPrimary}"
-                                 Background="#44FFFFFF"
-                                 IsVisible="False"/>
-                </Panel>
-            </Border>
+                <!-- Seasons badge overlay -->
+                <Border x:Name="SeasonsBadge"
+                        Background="{DynamicResource AccentPrimary}"
+                        CornerRadius="0,0,0,8"
+                        Padding="8,4"
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Top"
+                        IsVisible="False">
+                    <TextBlock x:Name="SeasonsText"
+                               Text="2 Seasons"
+                               FontSize="10" FontWeight="Bold"
+                               Foreground="White"/>
+                </Border>
+            </Panel>
             
-            <!-- Title -->
-            <TextBlock x:Name="TitleText"
-                       Text="Series Title"
-                       FontSize="13" FontWeight="SemiBold"
-                       Foreground="{DynamicResource TextPrimary}"
-                       TextTrimming="CharacterEllipsis"
-                       MaxLines="2"
-                       LineHeight="16"/>
-            
-            <!-- Subtitle / Episode count -->
-            <TextBlock x:Name="SubtitleText"
-                       Text=""
-                       FontSize="11"
-                       Foreground="{DynamicResource TextSecondary}"
-                       Opacity="0.6"
-                       TextTrimming="CharacterEllipsis"/>
-        </StackPanel>
+            <!-- Text Content (Overlay) -->
+            <StackPanel VerticalAlignment="Bottom" Margin="12,12,12,16">
+                <!-- Title -->
+                <TextBlock x:Name="TitleText"
+                           Text="Series Title"
+                           FontSize="14" FontWeight="Bold"
+                           Foreground="White"
+                           TextTrimming="CharacterEllipsis"
+                           MaxLines="2"
+                           LineHeight="18"
+                           Margin="0,0,0,4">
+                    <TextBlock.Effect>
+                        <DropShadowEffect Color="Black" BlurRadius="4" Opacity="0.5" OffsetX="0" OffsetY="1"/>
+                    </TextBlock.Effect>
+                </TextBlock>
+                
+                <!-- Subtitle / Episode count -->
+                <TextBlock x:Name="SubtitleText"
+                           Text=""
+                           FontSize="12"
+                           Foreground="#CCFFFFFF"
+                           TextTrimming="CharacterEllipsis"/>
+            </StackPanel>
+        </Grid>
     </Border>
 </UserControl>

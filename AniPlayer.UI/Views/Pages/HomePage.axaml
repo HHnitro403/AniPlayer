@@ -5,17 +5,18 @@
              mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="600"
              x:Class="AniPlayer.UI.HomePage">
 
-    <ScrollViewer HorizontalScrollBarVisibility="Disabled">
-        <StackPanel Margin="32,24" Spacing="32">
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="32,32,32,64" Spacing="48">
 
             <!-- Continue Watching -->
-            <StackPanel Spacing="12">
+            <StackPanel Spacing="16">
                 <TextBlock Text="Continue Watching"
-                           FontSize="22" FontWeight="SemiBold"
-                           Foreground="{DynamicResource SystemControlForegroundBaseHighBrush}"/>
+                           FontSize="20" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextPrimary}"/>
                 <TextBlock x:Name="ContinueWatchingEmpty"
                            Text="Nothing here yet — start watching something!"
-                           Opacity="0.5" FontSize="14"/>
+                           Opacity="0.5" FontSize="14" Foreground="{DynamicResource TextSecondary}"
+                           IsVisible="False"/>
                 <ItemsControl x:Name="ContinueWatchingList">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
@@ -26,48 +27,61 @@
             </StackPanel>
 
             <!-- Recently Added -->
-            <StackPanel Spacing="12">
+            <StackPanel Spacing="16">
                 <TextBlock Text="Recently Added"
-                           FontSize="22" FontWeight="SemiBold"
-                           Foreground="{DynamicResource SystemControlForegroundBaseHighBrush}"/>
+                           FontSize="20" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextPrimary}"/>
                 <TextBlock x:Name="RecentlyAddedEmpty"
                            Text="Add a library folder to get started."
-                           Opacity="0.5" FontSize="14"/>
+                           Opacity="0.5" FontSize="14" Foreground="{DynamicResource TextSecondary}"
+                           IsVisible="False"/>
                 <ItemsControl x:Name="RecentlyAddedList">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
-                            <WrapPanel Orientation="Horizontal"/>
+                            <WrapPanel Orientation="Horizontal" ItemWidth="180"/>
                         </ItemsPanelTemplate>
                     </ItemsControl.ItemsPanel>
                 </ItemsControl>
             </StackPanel>
 
-            <!-- Quick Actions / Welcome -->
-            <StackPanel x:Name="QuickActionsSection" Spacing="24" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,60,0,0">
-                <StackPanel Spacing="8">
-                    <TextBlock Text="Welcome to AniPlayer"
-                               FontSize="32" FontWeight="Bold"
-                               HorizontalAlignment="Center"
-                               Foreground="{DynamicResource AccentPrimary}"/>
-                    <TextBlock Text="Your local anime library is just one folder away."
-                               FontSize="16" Opacity="0.6"
-                               HorizontalAlignment="Center"/>
+            <!-- Quick Actions / Welcome Card -->
+            <Border x:Name="QuickActionsSection"
+                    Background="{DynamicResource BgCard}" 
+                    CornerRadius="16" 
+                    Padding="48"
+                    Margin="0,24,0,0"
+                    MaxWidth="800"
+                    HorizontalAlignment="Center">
+                <StackPanel Spacing="32">
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="Welcome to AniPlayer"
+                                   FontSize="28" FontWeight="Bold"
+                                   HorizontalAlignment="Center"
+                                   Foreground="{DynamicResource TextPrimary}"/>
+                        <TextBlock Text="Your local anime library is just one folder away."
+                                   FontSize="16" Foreground="{DynamicResource TextSecondary}"
+                                   HorizontalAlignment="Center"/>
+                    </StackPanel>
+                    
+                    <StackPanel Orientation="Horizontal" Spacing="24" HorizontalAlignment="Center">
+                        <Button x:Name="AddLibraryButton"
+                                Content="Add Library Folder"
+                                Classes="Primary"
+                                Padding="24,12"
+                                Click="AddLibraryButton_Click"/>
+                                
+                        <Button x:Name="OpenFileButton"
+                                Content="Open Video File"
+                                Background="Transparent"
+                                BorderBrush="{DynamicResource TextSecondary}"
+                                BorderThickness="1"
+                                Foreground="{DynamicResource TextPrimary}"
+                                CornerRadius="8"
+                                Padding="24,12"
+                                Click="OpenFileButton_Click"/>
+                    </StackPanel>
                 </StackPanel>
-                
-                <StackPanel Orientation="Horizontal" Spacing="16" HorizontalAlignment="Center">
-                    <Button x:Name="AddLibraryButton"
-                            Content="Add Your First Library"
-                            Classes="Primary"
-                            Padding="24,14"
-                            FontSize="16"
-                            Click="AddLibraryButton_Click"/>
-                    <Button x:Name="OpenFileButton"
-                            Content="Open Video File"
-                            Padding="24,14"
-                            FontSize="16"
-                            Click="OpenFileButton_Click"/>
-                </StackPanel>
-            </StackPanel>
+            </Border>
 
         </StackPanel>
     </ScrollViewer>

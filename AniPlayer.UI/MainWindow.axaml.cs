@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.Threading;
 using Avalonia.Input;
 using Microsoft.Extensions.DependencyInjection;
 using Aniplayer.Core.Interfaces;
@@ -61,7 +62,7 @@ namespace AniPlayer.UI
             if (page != "Player" && PageHost.Content == _playerPage)
                 _playerPage.PausePlayback();
 
-            PageHost.Content = page switch
+            Control newContent = page switch
             {
                 "Home"     => _homePage,
                 "Library"  => _libraryPage,
@@ -70,6 +71,18 @@ namespace AniPlayer.UI
                 "Settings" => _optionsPage,
                 _          => _homePage
             };
+            
+            PageHost.Content = newContent;
+
+            if (newContent != null)
+            {
+                newContent.Classes.Add("PageEnter");
+                Dispatcher.UIThread.InvokeAsync(async () =>
+                {
+                    await Task.Delay(200);
+                    newContent.Classes.Remove("PageEnter");
+                });
+            }
 
             SidebarControl.SetActive(page);
         }

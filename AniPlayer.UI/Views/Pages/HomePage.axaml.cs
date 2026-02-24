@@ -34,12 +34,12 @@ public partial class HomePage : UserControl
         Logger.Log($"[HomePage] DisplayContinueWatching: {list.Count} items", LogRegion.UI);
 
         ContinueWatchingList.ItemsSource = null;
-        var cards = new List<SeriesCard>();
+        var cards = new List<ContinueWatchingCard>();
 
         foreach (var (ep, progress, series) in list)
         {
-            var card = new SeriesCard();
-            card.SetContinueWatchingData(ep, progress, series);
+            var card = new ContinueWatchingCard();
+            card.SetData(ep, progress, series);
             card.Clicked += (id) => ResumeEpisodeRequested?.Invoke(id);
             cards.Add(card);
         }

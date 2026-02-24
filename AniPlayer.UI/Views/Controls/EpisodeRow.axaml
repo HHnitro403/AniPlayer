@@ -6,7 +6,20 @@
              x:Class="AniPlayer.UI.Views.Controls.EpisodeRow"
              Cursor="Hand">
 
-    <Border Background="{DynamicResource BgBase}" CornerRadius="{DynamicResource RadiusS}" Padding="12,8"
+    <UserControl.Styles>
+        <Style Selector="Border#MainBorder">
+            <Setter Property="Transitions">
+                <Transitions>
+                    <BrushTransition Property="Background" Duration="0:0:0.1"/>
+                </Transitions>
+            </Setter>
+        </Style>
+        <Style Selector="Border#MainBorder:pointerover">
+            <Setter Property="Background" Value="{DynamicResource BgElevated}"/>
+        </Style>
+    </UserControl.Styles>
+
+    <Border x:Name="MainBorder" Background="{DynamicResource BgBase}" CornerRadius="{DynamicResource RadiusS}" Padding="12,8"
             Margin="0,1">
         <Grid ColumnDefinitions="Auto,*,Auto">
             <!-- Episode number -->
