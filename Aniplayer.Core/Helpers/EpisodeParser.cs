@@ -182,15 +182,16 @@ public static class EpisodeParser
         if (string.IsNullOrWhiteSpace(rawFolderName))
             return rawFolderName;
 
-        // 1. Strip leading tags: [Group], 【Group】, (Group)
-        var cleaned = Regex.Replace(rawFolderName, @"^(\[.*?\]|【.*?】|\(.*?\))\s*", "");
+        // 1. Strip ALL leading tags: [Group], 【Group】, (Group) — handles multiple consecutive tags like [SubsPlease][720p]
+        var cleaned = Regex.Replace(rawFolderName, @"^(?:(?:\[.*?\]|【.*?】|\(.*?\))\s*)+", "");
 
         // 2. Strip trailing [tag] blocks (quality, hash, checksum, codec, etc.)
         cleaned = Regex.Replace(cleaned, @"(\s*\[.*?\])+\s*$", "");
 
-        // 3. Strip trailing metadata parenthetical suffixes at end:
-        // (Seasons 1-4 + OVAs + Specials), (Season 1), (S1-S4), (Complete), (Batch), (Dub), (2024)
-        cleaned = Regex.Replace(cleaned, @"\s*\((?:Seasons?\s|S\d|Part|Cour|Complete|Batch|Dual\s?Audio|Multi\s?Subs?|Dub|\d{4}).*\)\s*$",
+        // 3. Strip trailing metadata/quality parenthetical suffixes:
+        // (Seasons 1-4 + OVAs + Specials), (Season 1), (Complete), (Dub), (2024), (BD 1080p), (720p), etc.
+        cleaned = Regex.Replace(cleaned,
+            @"\s*\((?:Seasons?\s|S\d|Part|Cour|Complete|Batch|Dual\s?Audio|Multi\s?Subs?|Dub|\d{4}|BD|BluRay|BDRip|WEB-?DL|WEBRip|\d{3,4}p|HEVC|AVC|Hi10P|10bit|8bit|x26[45]|FLAC|AAC).*\)\s*$",
             "", RegexOptions.IgnoreCase);
 
         // 4. Strip trailing Season/Cour/Part suffixes without parentheses:

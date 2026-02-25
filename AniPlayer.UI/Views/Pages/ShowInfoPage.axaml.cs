@@ -6,6 +6,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Aniplayer.Core.Constants;
+using Aniplayer.Core.Helpers;
 using Aniplayer.Core.Interfaces;
 using Aniplayer.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
@@ -77,7 +78,7 @@ public partial class ShowInfoPage : UserControl
         await LoadTrackPreferencesAsync(representative.Id);
 
         // Header info (from representative series)
-        TitleText.Text = representative.SeriesGroupName;
+        TitleText.Text = representative.DisplayTitle;
         AlternateTitleText.Text = ""; // This might need adjustment if alternate titles are per-season
         AlternateTitleText.IsVisible = false;
         RefreshMetadataButton.IsVisible = true;
@@ -151,7 +152,13 @@ public partial class ShowInfoPage : UserControl
         {
             if (episodesBySeason.TryGetValue(series.Id, out var episodes))
             {
-                var header = series.SeasonNumber == 0 ? "Specials / OVAs" : $"Season {series.SeasonNumber}";
+                string header;
+                if (series.SeasonNumber == 0)
+                    header = "Specials / OVAs";
+                else if (EpisodeParser.TryParseSeasonFromFolder(series.FolderName, out _))
+                    header = $"Season {series.SeasonNumber}";
+                else
+                    header = series.FolderName; // Non-standard name (e.g. "New", "BorN", "Hero")
                 SeasonGroups.Add(new SeasonGroup
                 {
                     Header = header,
@@ -205,7 +212,8 @@ public partial class ShowInfoPage : UserControl
         }
         catch (Exception ex)
         {
-            Logger.Log($"[ShowInfoPage] Metadata refresh failed: {ex.Message}", LogRegion.UI);
+            Logger.Log($"[ShowInfoPage] Metadata refresh FAILED: {ex.GetType().Name}: {ex.Message}");
+            Logger.LogError("Metadata refresh exception", ex);
             MainWindow.ShowToast($"Refresh failed: {ex.Message}", true);
         }
         finally

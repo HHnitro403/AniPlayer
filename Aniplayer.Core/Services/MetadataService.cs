@@ -108,8 +108,7 @@ public class MetadataService : IMetadataService
         var metadata = await SearchAsync(searchTitle, ct);
         if (metadata == null)
         {
-            _logger.LogInformation("No AniList match for '{SearchTitle}' (folder: '{FolderName}')",
-                searchTitle, series.FolderName);
+            _logger.LogInformation("[Metadata] No match found for '{Title}'", searchTitle);
             return;
         }
 
@@ -207,7 +206,11 @@ public class MetadataService : IMetadataService
 
     private static string CleanTitleForSearch(string title)
     {
-        return EpisodeParser.CleanSeriesTitle(title);
+        var cleaned = EpisodeParser.CleanSeriesTitle(title);
+        // Strip any remaining trailing parenthetical groups (e.g. "(Lelouch of the Rebellion)", "(TV)")
+        // so the AniList search query is as clean as possible
+        cleaned = Regex.Replace(cleaned, @"\s*\([^)]*\)\s*$", "").Trim();
+        return cleaned;
     }
 
     // ── AniList JSON response mapping ────────────────────────────

@@ -123,7 +123,7 @@ public class ScannerService : IScannerService
 
                 // Top-level special folders (OVA, Specials alongside Season folders)
                 foreach (var specialDir in specialFolders)
-                    await ScanSeasonAsync(libraryId, dirInfo.Name, specialDir.FullName, ct);
+                    await ScanSeasonAsync(libraryId, dirInfo.Name, specialDir.FullName, ct, fallbackSeasonNumber: 0);
 
                 // Root videos alongside seasons (rare but valid — e.g. a movie file next to Season folders)
                 if (hasRootVideos)
@@ -134,12 +134,12 @@ public class ScannerService : IScannerService
                 // ── Non-standard multi-season: "High School DxD" -> "New", "BorN", "Hero" ──
                 Report($"Scanning multi-season series (non-standard names): {dirInfo.Name}");
                 var seasonCounter = 1;
-                foreach (var seasonDir in contentFolders.OrderBy(d => d.Name))
+                foreach (var seasonDir in contentFolders.OrderBy(d => d.CreationTime))
                     await ScanSeasonAsync(libraryId, dirInfo.Name, seasonDir.FullName, ct, fallbackSeasonNumber: seasonCounter++);
 
                 // Special folders alongside non-standard seasons
                 foreach (var specialDir in specialFolders)
-                    await ScanSeasonAsync(libraryId, dirInfo.Name, specialDir.FullName, ct);
+                    await ScanSeasonAsync(libraryId, dirInfo.Name, specialDir.FullName, ct, fallbackSeasonNumber: 0);
             }
             else
             {

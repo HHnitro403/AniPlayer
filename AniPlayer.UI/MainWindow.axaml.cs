@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Threading;
 using Avalonia.Input;
@@ -10,6 +11,7 @@ using System.ComponentModel;
 using System.Linq;
 using System.Threading.Tasks;
 using Aniplayer.Core.Constants;
+using Avalonia.Interactivity;
 
 namespace AniPlayer.UI
 {
@@ -28,6 +30,7 @@ namespace AniPlayer.UI
         private readonly IScannerService _scannerService;
         private readonly IFolderWatcherService _folderWatcher;
         private readonly IWatchProgressService _watchProgressService;
+        private readonly IMetadataService _metadataService;
         
         private IReadOnlyList<Episode> _currentPlaylist = new List<Episode>();
         private bool _isFullscreen;
@@ -55,6 +58,7 @@ namespace AniPlayer.UI
             _scannerService       = App.Services.GetRequiredService<IScannerService>();
             _folderWatcher        = App.Services.GetRequiredService<IFolderWatcherService>();
             _watchProgressService = App.Services.GetRequiredService<IWatchProgressService>();
+            _metadataService      = App.Services.GetRequiredService<IMetadataService>();
             
             _homePage = new HomePage();
             _libraryPage = new LibraryPage();
@@ -70,7 +74,9 @@ namespace AniPlayer.UI
             _ = InitializeAsync();
 
             Closing += MainWindow_Closing;
-            KeyDown += OnMainWindowKeyDown;
+            // Use Tunnel (Preview) phase so this handler fires BEFORE the focused element sees the key.
+            // This prevents sidebar/control buttons from activating via Space when the player is open.
+            AddHandler(KeyDownEvent, OnMainWindowKeyDown, RoutingStrategies.Tunnel);
             Logger.Log("MainWindow constructor completed");
         }
         
@@ -202,18 +208,20 @@ namespace AniPlayer.UI
                     await _scannerService.ScanLibraryAsync(existing.Id);
                     _libraryPage.HideScanProgress();
                     await RefreshPagesAsync();
+                    _ = FetchMissingMetadataInBackgroundAsync();
                     return;
                 }
-                
+
                 var label = System.IO.Path.GetFileName(path);
                 var libraryId = await _libraryService.AddLibraryAsync(path, label);
-                
+
                 _libraryPage.ShowScanProgress();
                 await _scannerService.ScanLibraryAsync(libraryId);
                 _libraryPage.HideScanProgress();
-                
+
                 _folderWatcher.WatchLibrary(libraryId, path);
                 await RefreshPagesAsync();
+                _ = FetchMissingMetadataInBackgroundAsync();
                 
                 if (source == "FirstRun")
                 {
@@ -364,6 +372,22 @@ namespace AniPlayer.UI
                 _libraryPage.HideScanProgress();
             }
             await RefreshPagesAsync();
+            _ = FetchMissingMetadataInBackgroundAsync();
+        }
+
+        private async Task FetchMissingMetadataInBackgroundAsync()
+        {
+            try
+            {
+                Logger.Log("[Metadata] Background fetch started for series without metadata");
+                await _metadataService.FetchAllMissingMetadataAsync();
+                Logger.Log("[Metadata] Background fetch complete");
+                await RefreshPagesAsync();
+            }
+            catch (Exception ex)
+            {
+                Logger.Log($"[Metadata] Background fetch failed: {ex.Message}");
+            }
         }
 
         private async Task StartFolderWatchersAsync()
@@ -385,13 +409,18 @@ namespace AniPlayer.UI
             await _scannerService.ScanLibraryAsync(libraryId);
             _libraryPage.HideScanProgress();
             await RefreshPagesAsync();
+            _ = FetchMissingMetadataInBackgroundAsync();
         }
         
         private void ToggleFullscreen()
         {
             _isFullscreen = !_isFullscreen;
             WindowState = _isFullscreen ? WindowState.FullScreen : WindowState.Normal;
+            // Remove the title-bar margin and collapse the sidebar column in fullscreen
+            MainGrid.Margin = _isFullscreen ? new Thickness(0) : new Thickness(0, 32, 0, 0);
+            MainGrid.ColumnDefinitions[0].Width = _isFullscreen ? new GridLength(0) : new GridLength(240);
             SidebarControl.IsVisible = !_isFullscreen;
+            SidebarSeparator.IsVisible = !_isFullscreen;
             _playerPage.SetFullscreen(_isFullscreen);
             Logger.Log($"Fullscreen: {_isFullscreen}");
         }

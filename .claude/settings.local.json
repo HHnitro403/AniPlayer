@@ -13,7 +13,8 @@
       "Bash(git add:*)",
       "Bash(git commit -m \"$\\(cat <<''EOF''\nfixed various UI issues\n\n- Added WS_CLIPSIBLINGS flag to prevent native HWND from painting over Avalonia controls\n- Moved SkipOverlayButton to overlay Grid to fix visibility in fullscreen\n- Added seek forward/backward buttons with keyboard shortcut integration\n- Fixed keyboard shortcuts not working when UI visible by making ProgressSlider non-focusable\n- Improved controls spacing to prevent progress bar overlap\n- Disabled MPV''s built-in OSD controls\n- Added ArrangeOverride verification logging\n\nCo-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
       "Bash(git push:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(dir:*)"
     ]
   }
 }

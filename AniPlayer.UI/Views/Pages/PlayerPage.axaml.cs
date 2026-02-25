@@ -513,6 +513,7 @@ public partial class PlayerPage : UserControl
             }
 
             var pref = await _libraryService.GetSeriesTrackPreferenceAsync(_currentEpisode.SeriesId);
+            var selectedAudioId = 0L;
             if (pref != null)
             {
                 var match = MatchPreferredAudioTrack(audioTracks, pref.PreferredAudioLanguage, pref.PreferredAudioTitle, pref.PreferredAudioTrackId);
@@ -520,11 +521,15 @@ public partial class PlayerPage : UserControl
                 {
                     Logger.Log($"Auto-selecting preferred audio track {match.id}");
                     SetOption("aid", $"{match.id}");
+                    selectedAudioId = match.id; // Use known value — mpv may not reflect it yet
                 }
             }
-
-            var aidStr = GetMpvPropertyString("aid");
-            if (!long.TryParse(aidStr, out var currentAid)) currentAid = 0;
+            // Only query mpv for current track if no preference was applied
+            if (selectedAudioId == 0)
+            {
+                var aidStr = GetMpvPropertyString("aid");
+                if (!long.TryParse(aidStr, out selectedAudioId)) selectedAudioId = 0;
+            }
 
             foreach (var (id, label, _, _) in audioTracks)
             {
@@ -540,7 +545,7 @@ public partial class PlayerPage : UserControl
                     Foreground = new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.Parse("#D0D0E0")),
                     CornerRadius = new CornerRadius(4)
                 };
-                if (id == currentAid) btn.FontWeight = Avalonia.Media.FontWeight.Bold;
+                if (id == selectedAudioId) btn.FontWeight = Avalonia.Media.FontWeight.Bold;
                 btn.Click += (_, _) => { if (btn.Tag is int tid) SwitchAudioTrack(tid); };
                 AudioTracksPanel.Children.Add(btn);
             }
@@ -552,20 +557,23 @@ public partial class PlayerPage : UserControl
         List<(int id, string label, string? lang, string? title)> tracks,
         string? prefLang, string? prefTitle, int? prefTrackId = null)
     {
-        if (prefTrackId.HasValue && prefTrackId.Value > 0)
-        {
-            var m = tracks.FirstOrDefault(t => t.id == prefTrackId.Value);
-            if (m.id > 0) return (m.id, m.lang, m.title);
-        }
+        // 1. Title first — most specific, consistent across all episodes in a series
         if (!string.IsNullOrEmpty(prefTitle))
         {
             var m = tracks.FirstOrDefault(t => string.Equals(t.title, prefTitle, StringComparison.OrdinalIgnoreCase));
             if (m.title != null) return (m.id, m.lang, m.title);
         }
+        // 2. Language — reliable across episodes regardless of encode differences
         if (!string.IsNullOrEmpty(prefLang))
         {
             var m = tracks.FirstOrDefault(t => string.Equals(t.lang, prefLang, StringComparison.OrdinalIgnoreCase));
             if (m.lang != null) return (m.id, m.lang, m.title);
+        }
+        // 3. Track ID last — IDs can vary between episodes/encodes, use only as fallback
+        if (prefTrackId.HasValue && prefTrackId.Value > 0)
+        {
+            var m = tracks.FirstOrDefault(t => t.id == prefTrackId.Value);
+            if (m.id > 0) return (m.id, m.lang, m.title);
         }
         return default;
     }
@@ -656,22 +664,34 @@ public partial class PlayerPage : UserControl
             }
 
             var pref = await _libraryService.GetSeriesTrackPreferenceAsync(_currentEpisode.SeriesId);
-            if (pref != null && !string.IsNullOrEmpty(pref.PreferredSubtitleLanguage))
+            var selectedSubId = -1; // -1 = not set by preference; 0 = "None" explicitly chosen
+            if (pref != null && (!string.IsNullOrEmpty(pref.PreferredSubtitleLanguage) || !string.IsNullOrEmpty(pref.PreferredSubtitleName)))
             {
-                var match = MatchPreferredSubtitleTrack(subtitleTracks, pref.PreferredSubtitleLanguage, pref.PreferredSubtitleName);
-                if (match.id > 0)
+                if (pref.PreferredSubtitleLanguage == "none")
                 {
-                    Logger.Log($"Auto-selecting preferred subtitle track {match.id}");
-                    SetOption("sid", $"{match.id}");
+                    // User previously chose "None" — disable subtitles
+                    Logger.Log("Auto-disabling subtitles per saved preference");
+                    SetOption("sid", "no");
+                    selectedSubId = 0;
+                }
+                else
+                {
+                    var match = MatchPreferredSubtitleTrack(subtitleTracks, pref.PreferredSubtitleLanguage, pref.PreferredSubtitleName);
+                    if (match.id > 0)
+                    {
+                        Logger.Log($"Auto-selecting preferred subtitle track {match.id}");
+                        SetOption("sid", $"{match.id}");
+                        selectedSubId = match.id; // Use known value — mpv may not reflect it yet
+                    }
                 }
             }
-
-            var sidStr = GetMpvPropertyString("sid");
-            var currentSid = 0;
-            if (!string.IsNullOrEmpty(sidStr) && sidStr != "no")
+            // Only query mpv for current track if no preference was applied
+            if (selectedSubId == -1)
             {
-                if (long.TryParse(sidStr, out var temp))
-                    currentSid = (int)temp;
+                var sidStr = GetMpvPropertyString("sid");
+                selectedSubId = 0;
+                if (!string.IsNullOrEmpty(sidStr) && sidStr != "no")
+                    int.TryParse(sidStr, out selectedSubId);
             }
 
             foreach (var (id, label, _, _) in subtitleTracks)
@@ -688,7 +708,7 @@ public partial class PlayerPage : UserControl
                     Foreground = new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.Parse("#D0D0E0")),
                     CornerRadius = new CornerRadius(4)
                 };
-                if (id == currentSid) btn.FontWeight = Avalonia.Media.FontWeight.Bold;
+                if (id == selectedSubId) btn.FontWeight = Avalonia.Media.FontWeight.Bold;
                 btn.Click += (_, _) => { if (btn.Tag is int tid) SwitchSubtitleTrack(tid); };
                 SubtitleTracksPanel.Children.Add(btn);
             }
@@ -720,10 +740,16 @@ public partial class PlayerPage : UserControl
         if (trackId == 0)
         {
             SetOption("sid", "no");
+            _ = _libraryService.UpsertSeriesSubtitlePreferenceAsync(_currentEpisode.SeriesId, "none", null);
         }
         else
         {
             SetOption("sid", $"{trackId}");
+            if (_subtitleTrackInfo.TryGetValue(trackId, out var info))
+            {
+                var lang = info.lang ?? "";
+                _ = _libraryService.UpsertSeriesSubtitlePreferenceAsync(_currentEpisode.SeriesId, lang, info.title);
+            }
         }
 
         foreach (var child in SubtitleTracksPanel.Children)
@@ -732,12 +758,6 @@ public partial class PlayerPage : UserControl
                 btn.FontWeight = (btn.Tag is int id && id == trackId)
                     ? Avalonia.Media.FontWeight.Bold
                     : Avalonia.Media.FontWeight.Normal;
-        }
-
-        if (trackId > 0 && _subtitleTrackInfo.TryGetValue(trackId, out var info))
-        {
-            var lang = info.lang ?? "";
-            _ = _libraryService.UpsertSeriesSubtitlePreferenceAsync(_currentEpisode.SeriesId, lang, info.title);
         }
     }
 

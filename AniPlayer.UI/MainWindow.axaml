@@ -13,17 +13,18 @@
         ExtendClientAreaTitleBarHeightHint="32"
         WindowStartupLocation="CenterScreen">
 
-    <Grid ColumnDefinitions="240,*" Margin="0,32,0,0">
+    <Grid x:Name="MainGrid" ColumnDefinitions="240,*" Margin="0,32,0,0">
 
         <!-- Sidebar -->
         <local:Sidebar x:Name="SidebarControl" Grid.Column="0"/>
-        
+
         <!-- Sidebar separator -->
-        <Border Grid.Column="0" 
-                HorizontalAlignment="Right" 
-                VerticalAlignment="Stretch" 
-                Width="1" 
-                Background="{DynamicResource BgSurface}" 
+        <Border x:Name="SidebarSeparator"
+                Grid.Column="0"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Stretch"
+                Width="1"
+                Background="{DynamicResource BgSurface}"
                 Opacity="0.5"/>
 
         <!-- Page content area -->

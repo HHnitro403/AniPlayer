@@ -62,7 +62,8 @@
                         Classes="NavButton"
                         Content="Settings"
                         Click="SettingsButton_Click"
-                        Margin="16,4,0,4"/>
+                        Margin="16,4,0,4"
+                        Focusable="False"/>
             </StackPanel>
 
             <!-- Nav buttons -->
@@ -70,15 +71,18 @@
                 <Button x:Name="HomeButton"
                         Classes="NavButton NavActive"
                         Content="Home"
-                        Click="HomeButton_Click"/>
+                        Click="HomeButton_Click"
+                        Focusable="False"/>
                 <Button x:Name="LibraryButton"
                         Classes="NavButton"
                         Content="Library"
-                        Click="LibraryButton_Click"/>
+                        Click="LibraryButton_Click"
+                        Focusable="False"/>
                 <Button x:Name="PlayerButton"
                         Classes="NavButton"
                         Content="Player"
-                        Click="PlayerButton_Click"/>
+                        Click="PlayerButton_Click"
+                        Focusable="False"/>
             </StackPanel>
 
         </DockPanel>
