@@ -8,6 +8,7 @@ using Aniplayer.Core.Helpers;
 using Aniplayer.Core.Interfaces;
 using Aniplayer.Core.Models;
 using Microsoft.Extensions.Logging;
+using System.Net.Http;
 
 namespace Aniplayer.Core.Services;
 
@@ -15,8 +16,8 @@ public class MetadataService : IMetadataService
 {
     private readonly ILibraryService _library;
     private readonly ILogger<MetadataService> _logger;
-    private readonly HttpClient _http;
-    
+    private readonly IHttpClientFactory _httpClientFactory;
+
     private readonly SemaphoreSlim _semaphore = new(1, 1);
     private DateTime _lastRequestTime = DateTime.MinValue;
 
@@ -35,14 +36,11 @@ public class MetadataService : IMetadataService
           }
         }";
 
-    public MetadataService(ILibraryService library, ILogger<MetadataService> logger)
+    public MetadataService(ILibraryService library, ILogger<MetadataService> logger, IHttpClientFactory httpClientFactory)
     {
         _library = library;
         _logger = logger;
-        _http = new HttpClient
-        {
-            Timeout = TimeSpan.FromSeconds(AppConstants.AniListTimeoutSeconds)
-        };
+        _httpClientFactory = httpClientFactory;
     }
 
     public async Task<AniListMetadata?> SearchAsync(string title, CancellationToken ct = default)
@@ -57,8 +55,21 @@ public class MetadataService : IMetadataService
             }
             _lastRequestTime = DateTime.UtcNow;
 
+            var http = _httpClientFactory.CreateClient("anilist");
             var payload = new { query = SearchQuery, variables = new { search = title } };
-            var response = await _http.PostAsJsonAsync(AppConstants.AniListEndpoint, payload, ct);
+            var response = await http.PostAsJsonAsync(AppConstants.AniListEndpoint, payload, ct);
+
+            // Handle HTTP 429 (Too Many Requests) with retry
+            if (response.StatusCode == HttpStatusCode.TooManyRequests)
+            {
+                var retryAfter = response.Headers.RetryAfter?.Delta ?? TimeSpan.FromSeconds(60);
+                _logger.LogWarning("AniList rate limit hit for '{Title}', retrying after {Seconds}s",
+                    title, retryAfter.TotalSeconds);
+                await Task.Delay(retryAfter, ct);
+
+                // Retry once
+                response = await http.PostAsJsonAsync(AppConstants.AniListEndpoint, payload, ct);
+            }
 
             if (!response.IsSuccessStatusCode)
             {
@@ -145,7 +156,8 @@ public class MetadataService : IMetadataService
             if (string.IsNullOrEmpty(ext)) ext = ".jpg";
             var localPath = Path.Combine(AppConstants.CoversPath, $"{seriesId}{ext}");
 
-            var bytes = await _http.GetByteArrayAsync(imageUrl, ct);
+            var http = _httpClientFactory.CreateClient("anilist");
+            var bytes = await http.GetByteArrayAsync(imageUrl, ct);
             await File.WriteAllBytesAsync(localPath, bytes, ct);
 
             _logger.LogInformation("Downloaded cover for series {Id} to {Path}", seriesId, localPath);

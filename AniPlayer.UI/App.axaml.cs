@@ -26,6 +26,13 @@ namespace AniPlayer.UI
 
             services.AddLogging(builder => builder.AddConsole());
 
+            // HttpClient factory for MetadataService
+            services.AddHttpClient("anilist", client =>
+            {
+                client.BaseAddress = new Uri(AppConstants.AniListEndpoint);
+                client.Timeout = TimeSpan.FromSeconds(AppConstants.AniListTimeoutSeconds);
+            });
+
             // Core services
             services.AddSingleton<IDatabaseService, DatabaseService>();
             services.AddSingleton<ISettingsService, SettingsService>();

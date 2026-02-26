@@ -269,13 +269,27 @@ namespace AniPlayer.UI
         public void Dispose()
         {
             if (!_isRunning) return;
-            
+
             _isRunning = false;
             _renderSignal.Set(); // Wake up thread so it can exit
-            
+
+            // Don't block the calling thread (which may be the UI thread).
+            // Signal the render thread to stop and let it clean up asynchronously.
+            // The thread is marked IsBackground = true, so it will be terminated when the app exits.
             if (_renderThread != null && _renderThread.IsAlive)
             {
-                _renderThread.Join(1000); // Wait for thread to finish cleanup
+                // Fire-and-forget: wait for thread completion in the background
+                System.Threading.Tasks.Task.Run(() =>
+                {
+                    if (_renderThread.Join(2000))
+                    {
+                        Logger.Log("Render thread exited cleanly");
+                    }
+                    else
+                    {
+                        Logger.LogError("Render thread did not exit within 2 seconds");
+                    }
+                });
             }
 
             if (_callbackHandle.IsAllocated) _callbackHandle.Free();

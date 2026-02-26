@@ -36,6 +36,11 @@ public class ScannerService : IScannerService
     public async Task ScanLibraryAsync(int libraryId, CancellationToken ct = default)
     {
         Report($"=== ScanLibrary START: libraryId={libraryId} ===");
+
+        // Clear parse cache to prevent unbounded memory growth across scans
+        EpisodeParser.ClearCache();
+        Report("Cleared episode parse cache");
+
         var lib = await _library.GetLibraryByIdAsync(libraryId);
         if (lib == null)
         {
@@ -158,6 +163,10 @@ public class ScannerService : IScannerService
         // Prune episodes whose files no longer exist
         await PruneDeletedEpisodesAsync(libraryId, ct);
 
+        // Clean up orphaned series (series with no episodes)
+        // This can occur if the scan is interrupted mid-series
+        await PruneOrphanedSeriesAsync(libraryId, ct);
+
         Report($"Scan complete for library {lib.Id}");
     }
 
@@ -187,6 +196,8 @@ public class ScannerService : IScannerService
         Report($"    Found {totalEpCount} episode(s) in season root");
 
         // Also scan for special sub-folders within a season folder, e.g. "Season 1/Specials"
+        // These should be stored as SEPARATE Series records (seasonNumber=0) so they display
+        // under "Specials / OVAs" section instead of mixed with regular episodes
         var specialSubDirs = seasonDirInfo.GetDirectories()
             .Where(d => EpisodeTypes.IsKnownSubfolder(d.Name))
             .ToList();
@@ -196,9 +207,21 @@ public class ScannerService : IScannerService
             ct.ThrowIfCancellationRequested();
             var subFolderName = Path.GetFileName(subDir.FullName);
             var episodeType = EpisodeTypes.FromFolderName(subFolderName);
-            var subCount = await ScanEpisodesInFolderAsync(seriesId, subDir.FullName, episodeType, ct);
+
+            // Create a separate Series record for this special content
+            // Use parent folder name + subfolder name to keep context (e.g., "S1 - NCED", "Season 2 - OVA")
+            var specialSeriesFolderName = $"{seasonFolderName} - {subFolderName}";
+
+            var specialSeriesId = await _library.UpsertSeriesAsync(
+                libraryId,
+                specialSeriesFolderName,
+                subDir.FullName,
+                seriesGroupName,
+                0);  // seasonNumber=0 marks this as "Specials / OVAs" section
+
+            var subCount = await ScanEpisodesInFolderAsync(specialSeriesId, subDir.FullName, episodeType, ct);
             totalEpCount += subCount;
-            Report($"    Found {subCount} {episodeType} episode(s) in {subFolderName}/");
+            Report($"    Found {subCount} {episodeType} episode(s) in {subFolderName}/ (created separate series ID={specialSeriesId})");
         }
 
         // Clean up: if no episodes were found at all, remove the empty series entry
@@ -344,15 +367,65 @@ public class ScannerService : IScannerService
                 }
             }
 
-            if (!Directory.Exists(series.Path))
+            // Check if series directory still exists, OR if this is a "loose files" series (series.Path == library root)
+            // For loose files series, prune only if all episodes are gone
+            var isLooseFilesSeries = series.Path == lib.Path;
+            var shouldPruneSeries = false;
+
+            if (isLooseFilesSeries)
             {
-                Report($"  Pruning missing series: {series.FolderName}");
+                // For loose files, check if there are any episodes left
+                var remainingEpisodes = await _library.GetEpisodesBySeriesIdAsync(series.Id);
+                if (!remainingEpisodes.Any())
+                {
+                    Report($"  Pruning empty loose-files series: {series.FolderName}");
+                    shouldPruneSeries = true;
+                }
+            }
+            else
+            {
+                // For regular series, check if the directory still exists
+                if (!Directory.Exists(series.Path))
+                {
+                    Report($"  Pruning missing series folder: {series.FolderName}");
+                    shouldPruneSeries = true;
+                }
+            }
+
+            if (shouldPruneSeries)
+            {
                 await _library.DeleteSeriesAsync(series.Id);
                 prunedSeries++;
             }
         }
 
         Report($"Pruning done: removed {prunedEpisodes} episode(s), {prunedSeries} series");
+    }
+
+    private async Task PruneOrphanedSeriesAsync(int libraryId, CancellationToken ct)
+    {
+        Report("Cleaning up orphaned series (series with no episodes)...");
+
+        var allSeries = await _library.GetSeriesByLibraryIdAsync(libraryId);
+        var orphanedCount = 0;
+
+        foreach (var series in allSeries)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            var episodes = await _library.GetEpisodesBySeriesIdAsync(series.Id);
+            if (!episodes.Any())
+            {
+                Report($"  Removing orphaned series: {series.FolderName} (no episodes)");
+                await _library.DeleteSeriesAsync(series.Id);
+                orphanedCount++;
+            }
+        }
+
+        if (orphanedCount > 0)
+        {
+            Report($"Removed {orphanedCount} orphaned series");
+        }
     }
 
     private void Report(string message) => ScanProgress?.Invoke(message);

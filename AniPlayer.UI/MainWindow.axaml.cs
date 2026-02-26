@@ -138,6 +138,10 @@ namespace AniPlayer.UI
             {
                 _ = ResumeEpisodeAsync(id);
             };
+            _homePage.PlayFileRequested += filePath =>
+            {
+                _ = PlaySingleFileAsync(filePath);
+            };
             
             _libraryPage.SeriesSelected += groupName =>
             {
@@ -178,7 +182,24 @@ namespace AniPlayer.UI
             {
                 _ = RemoveLibraryAsync(id);
             };
-            
+            _optionsPage.LibraryRescanRequested += async id =>
+            {
+                try
+                {
+                    await RescanLibraryAsync(id);
+                    ShowToast("Library rescanned successfully", false);
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogError($"Rescan failed for library {id}", ex);
+                    ShowToast($"Rescan failed: {ex.Message}", true);
+                }
+                finally
+                {
+                    _optionsPage.HideRescanProgress(id);
+                }
+            };
+
             _scannerService.ScanProgress += msg => Logger.Log($"[Scanner] {msg}", LogRegion.Scanner);
             
             _folderWatcher.LibraryChanged += libraryId =>
@@ -265,10 +286,14 @@ namespace AniPlayer.UI
                 }
                 _currentPlaylist = allEpisodes;
 
-                _showInfoPage.LoadSeriesData(seriesGroup, allEpisodes);
+                await _showInfoPage.LoadSeriesDataAsync(seriesGroup, allEpisodes);
                 NavigateTo("ShowInfo");
             }
-            catch (Exception ex) { Logger.Log($"[OpenSeries] Failed: {ex.Message}"); }
+            catch (Exception ex)
+            {
+                Logger.LogError($"[OpenSeries] Failed: {ex.Message}", ex);
+                ShowToast("Failed to load series data", true);
+            }
         }
 
         private async Task OpenSeriesAsync(int seriesId)
@@ -290,7 +315,7 @@ namespace AniPlayer.UI
             {
                 var episode = await _libraryService.GetEpisodeByIdAsync(episodeId);
                 if (episode == null) return;
-                
+
                 var series = await _libraryService.GetSeriesByIdAsync(episode.SeriesId);
                 if (series?.SeriesGroupName == null) return;
 
@@ -301,7 +326,7 @@ namespace AniPlayer.UI
                     var episodes = (await _libraryService.GetEpisodesBySeriesIdAsync(s.Id)).ToList();
                     allEpisodes.AddRange(episodes.OrderBy(e => e.EpisodeNumber));
                 }
-                
+
                 var index = allEpisodes.FindIndex(e => e.Id == episodeId);
                 if (index >= 0)
                 {
@@ -311,6 +336,39 @@ namespace AniPlayer.UI
                 }
             }
             catch (Exception ex) { Logger.Log($"[ResumeEpisode] Failed: {ex.Message}"); }
+        }
+
+        private async Task PlaySingleFileAsync(string filePath)
+        {
+            try
+            {
+                if (!System.IO.File.Exists(filePath))
+                {
+                    Logger.Log($"[PlaySingleFile] File not found: {filePath}");
+                    ShowToast("File not found", true);
+                    return;
+                }
+
+                Logger.Log($"[PlaySingleFile] Playing standalone file: {filePath}");
+
+                // Create a temporary Episode object for standalone playback
+                var standaloneEpisode = new Episode
+                {
+                    Id = 0, // Not from database
+                    SeriesId = 0,
+                    FilePath = filePath,
+                    Title = System.IO.Path.GetFileNameWithoutExtension(filePath)
+                };
+
+                _currentPlaylist = new List<Episode> { standaloneEpisode };
+                NavigateTo("Player");
+                await _playerPage.LoadPlaylistAsync(_currentPlaylist, 0);
+            }
+            catch (Exception ex)
+            {
+                Logger.Log($"[PlaySingleFile] Failed: {ex.Message}");
+                ShowToast("Failed to play file", true);
+            }
         }
         
         private async Task RefreshPagesAsync()

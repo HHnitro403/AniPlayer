@@ -17,9 +17,11 @@ public partial class OptionsPage : UserControl
 {
     public event Action<string>? LibraryFolderAdded;
     public event Action<int>? LibraryRemoveRequested;
+    public event Action<int>? LibraryRescanRequested;
 
     private readonly ISettingsService _settings;
     private bool _isProgrammaticChange; // Prevent event feedback loops
+    private readonly Dictionary<int, Button> _rescanButtons = new(); // Track rescan buttons by library ID
 
     public OptionsPage()
     {
@@ -117,6 +119,7 @@ public partial class OptionsPage : UserControl
     {
         Logger.Log("[OptionsPage] DisplayLibraries called");
         LibraryFoldersList.Children.Clear();
+        _rescanButtons.Clear();
 
         var count = 0;
         foreach (var lib in libraries)
@@ -127,6 +130,24 @@ public partial class OptionsPage : UserControl
         }
 
         Logger.Log($"[OptionsPage] Displayed {count} library folder(s)");
+    }
+
+    public void ShowRescanProgress(int libraryId)
+    {
+        if (_rescanButtons.TryGetValue(libraryId, out var button))
+        {
+            button.IsEnabled = false;
+            button.Content = "Scanning...";
+        }
+    }
+
+    public void HideRescanProgress(int libraryId)
+    {
+        if (_rescanButtons.TryGetValue(libraryId, out var button))
+        {
+            button.IsEnabled = true;
+            button.Content = "Rescan";
+        }
     }
 
     private Border CreateLibraryRow(Library lib)
@@ -154,6 +175,25 @@ public partial class OptionsPage : UserControl
         textStack.Children.Add(labelText);
         textStack.Children.Add(pathText);
 
+        var libId = lib.Id;
+
+        var rescanBtn = new Button
+        {
+            Content = "Rescan",
+            VerticalAlignment = VerticalAlignment.Center,
+            Padding = new Avalonia.Thickness(8, 4),
+            Margin = new Avalonia.Thickness(0, 0, 8, 0),
+        };
+
+        // Store button reference for progress updates
+        _rescanButtons[libId] = rescanBtn;
+
+        rescanBtn.Click += (_, _) =>
+        {
+            ShowRescanProgress(libId);
+            LibraryRescanRequested?.Invoke(libId);
+        };
+
         var removeBtn = new Button
         {
             Content = "Remove",
@@ -162,7 +202,6 @@ public partial class OptionsPage : UserControl
         };
         removeBtn.Classes.Add("Danger");
 
-        var libId = lib.Id;
         removeBtn.Click += async (_, _) =>
         {
             if (await ShowConfirmDialog("Remove this library? Your watch progress will not be deleted."))
@@ -171,13 +210,22 @@ public partial class OptionsPage : UserControl
             }
         };
 
+        var buttonStack = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        buttonStack.Children.Add(rescanBtn);
+        buttonStack.Children.Add(removeBtn);
+
         var grid = new Grid
         {
             ColumnDefinitions = ColumnDefinitions.Parse("*,Auto"),
         };
         grid.Children.Add(textStack);
-        Grid.SetColumn(removeBtn, 1);
-        grid.Children.Add(removeBtn);
+        Grid.SetColumn(buttonStack, 1);
+        grid.Children.Add(buttonStack);
 
         var border = new Border
         {

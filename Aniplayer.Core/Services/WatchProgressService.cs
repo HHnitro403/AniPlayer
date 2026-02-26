@@ -47,14 +47,6 @@ public class WatchProgressService : IWatchProgressService
             }
         }
 
-        // If user rewinds and starts watching again, clear completion cache
-        // This allows episode to be re-marked as complete if they watch it again
-        if (_completedEpisodesCache.ContainsKey(episodeId))
-        {
-            _completedEpisodesCache.TryRemove(episodeId, out _);
-            _logger.LogDebug("Cleared completion cache for episode {EpisodeId} (user rewound)", episodeId);
-        }
-
         _logger.LogDebug("Saving progress for episode {EpisodeId} at {Position}s", episodeId, positionSeconds);
 
         using var conn = _db.CreateConnection();
@@ -65,6 +57,17 @@ public class WatchProgressService : IWatchProgressService
             durationSeconds
         });
         _lastSaveTimes[episodeId] = Stopwatch.GetTimestamp();
+
+        // Clear completion cache when progress is saved - the DB query sets is_completed = 0,
+        // so if the user previously completed this episode and now is watching it again,
+        // they should be allowed to mark it complete again when they reach the threshold.
+        // This is safe because the cache is only used to prevent duplicate MarkCompletedAsync calls
+        // within a single playback session, and UpdateProgressAsync signals a new/resumed session.
+        if (_completedEpisodesCache.ContainsKey(episodeId))
+        {
+            _completedEpisodesCache.TryRemove(episodeId, out _);
+            _logger.LogDebug("Cleared completion cache for episode {EpisodeId} (progress update resets completion state)", episodeId);
+        }
 
         // Also ensure the episode table has the duration if it was missing
         await conn.ExecuteAsync(Queries.UpdateEpisodeDuration, new { id = episodeId, duration = durationSeconds });

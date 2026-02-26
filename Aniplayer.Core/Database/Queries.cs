@@ -171,11 +171,12 @@ public static class Queries
         WHERE e.series_id = @seriesId";
 
     public const string GetRecentlyWatched = @"
-        SELECT 
+        SELECT
             e.id AS Id, e.series_id AS SeriesId, e.file_path AS FilePath, e.title AS Title,
             e.episode_number AS EpisodeNumber, e.episode_type AS EpisodeType,
             e.duration_seconds AS DurationSeconds, e.thumbnail_path AS ThumbnailPath,
-            e.anilist_ep_id AS AnilistEpId, e.created_at AS CreatedAt,
+            e.anilist_ep_id AS AnilistEpId, e.external_subtitle_path AS ExternalSubtitlePath,
+            e.created_at AS CreatedAt,
             wp.id AS Id, wp.episode_id AS EpisodeId, wp.position_seconds AS PositionSeconds,
             wp.duration_seconds AS DurationSeconds, wp.is_completed AS IsCompleted,
             wp.last_watched_at AS LastWatchedAt

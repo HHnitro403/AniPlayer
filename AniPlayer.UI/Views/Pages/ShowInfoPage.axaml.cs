@@ -64,7 +64,7 @@ public partial class ShowInfoPage : UserControl
         }
     }
 
-    public async void LoadSeriesData(List<Series> seriesGroup, List<Episode> allEpisodes)
+    public async Task LoadSeriesDataAsync(List<Series> seriesGroup, List<Episode> allEpisodes)
     {
         _seriesList = seriesGroup; // Store the list for the refresh button
         _allEpisodes = allEpisodes;
@@ -203,8 +203,8 @@ public partial class ShowInfoPage : UserControl
                     refreshedAllEpisodes.AddRange(episodes.OrderBy(e => e.EpisodeNumber));
                 }
 
-                // Now call LoadSeriesData with the refreshed data to update UI
-                LoadSeriesData(refreshedSeriesGroup, refreshedAllEpisodes);
+                // Now call LoadSeriesDataAsync with the refreshed data to update UI
+                await LoadSeriesDataAsync(refreshedSeriesGroup, refreshedAllEpisodes);
 
                 // Notify the main window to refresh all pages (e.g. for library page title updates)
                 MetadataRefreshRequested?.Invoke();

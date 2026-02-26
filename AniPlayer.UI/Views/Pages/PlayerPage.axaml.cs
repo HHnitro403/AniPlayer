@@ -12,6 +12,7 @@ using System.Runtime.InteropServices;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using Aniplayer.Core.Interfaces;
 using Aniplayer.Core.Models;
@@ -27,7 +28,7 @@ public partial class PlayerPage : UserControl
     private TaskCompletionSource? _mpvReady;
     private DispatcherTimer? _positionTimer;
     private bool _isUserSeeking;
-    private bool _isTransitioning;
+    private int _isTransitioning; // 0 = false, 1 = true (for Interlocked)
     private DispatcherTimer? _controlsHideTimer;
     private bool _mouseOverControls;
     private bool _isFullscreen;
@@ -330,24 +331,29 @@ public partial class PlayerPage : UserControl
 
     private async Task ChangeToEpisodeAsync(Episode newEpisode, bool isInitialLoad = false)
     {
-        if (_isTransitioning) return;
-        _isTransitioning = true;
+        if (Interlocked.CompareExchange(ref _isTransitioning, 1, 0) != 0) return;
 
-        if (!isInitialLoad && _currentEpisode != null && _currentEpisode.Id != newEpisode.Id)
+        try
         {
-            Logger.Log($"[State] Saving progress for old episode {_currentEpisode.Id} before changing.");
-            await SaveCurrentProgressAsync(force: true);
+            if (!isInitialLoad && _currentEpisode != null && _currentEpisode.Id != newEpisode.Id)
+            {
+                Logger.Log($"[State] Saving progress for old episode {_currentEpisode.Id} before changing.");
+                await SaveCurrentProgressAsync(force: true);
+            }
+
+            Logger.Log($"[State] Changing to new episode {newEpisode.Id} ('{newEpisode.FilePath}')");
+            _currentEpisode = newEpisode;
+            _playlistIndex = _playlist.ToList().FindIndex(e => e.Id == newEpisode.Id);
+            _isCurrentEpisodeCompleted = false; // Reset completion latch for new episode
+
+            await LoadFileIntoMpvAsync(newEpisode.FilePath);
+
+            PlayerControlsControl.SetNextEnabled(_playlistIndex < _playlist.Count - 1);
         }
-
-        Logger.Log($"[State] Changing to new episode {newEpisode.Id} ('{newEpisode.FilePath}')");
-        _currentEpisode = newEpisode;
-        _playlistIndex = _playlist.ToList().FindIndex(e => e.Id == newEpisode.Id);
-        _isCurrentEpisodeCompleted = false; // Reset completion latch for new episode
-
-        await LoadFileIntoMpvAsync(newEpisode.FilePath);
-
-        _isTransitioning = false;
-        PlayerControlsControl.SetNextEnabled(_playlistIndex < _playlist.Count - 1);
+        finally
+        {
+            Interlocked.Exchange(ref _isTransitioning, 0);
+        }
     }
 
     private async Task LoadFileIntoMpvAsync(string filePath)
@@ -443,12 +449,32 @@ public partial class PlayerPage : UserControl
 
     private async Task PlayNextInPlaylistAsync()
     {
-        if (_isTransitioning || _playlistIndex >= _playlist.Count - 1) return;
+        // Use Interlocked.CompareExchange to atomically check and set the flag
+        // This prevents race condition if timer fires multiple times before transition completes
+        if (Interlocked.CompareExchange(ref _isTransitioning, 1, 0) != 0)
+        {
+            Logger.Log("PlayNextInPlaylistAsync: transition already in progress, skipping");
+            return;
+        }
 
-        var nextIndex = _playlistIndex + 1;
-        Logger.Log($"Playing next: index {nextIndex}/{_playlist.Count - 1}");
+        try
+        {
+            if (_playlistIndex >= _playlist.Count - 1)
+            {
+                Logger.Log("PlayNextInPlaylistAsync: already at last episode");
+                return;
+            }
 
-        await ChangeToEpisodeAsync(_playlist[nextIndex]);
+            var nextIndex = _playlistIndex + 1;
+            Logger.Log($"Playing next: index {nextIndex}/{_playlist.Count - 1}");
+
+            await ChangeToEpisodeAsync(_playlist[nextIndex]);
+        }
+        finally
+        {
+            // Always reset the flag, even if an exception occurs
+            Interlocked.Exchange(ref _isTransitioning, 0);
+        }
     }
 
     private async Task AnalyzeFileChapters()
@@ -847,7 +873,7 @@ public partial class PlayerPage : UserControl
 
             if (_mpvHandle == IntPtr.Zero) return;
 
-            if (eofReached == "yes" && !_isTransitioning && _playlistIndex < _playlist.Count - 1)
+            if (eofReached == "yes" && _isTransitioning == 0 && _playlistIndex < _playlist.Count - 1)
             {
                 Logger.Log("EOF reached — auto-playing next episode");
                 await PlayNextInPlaylistAsync();
