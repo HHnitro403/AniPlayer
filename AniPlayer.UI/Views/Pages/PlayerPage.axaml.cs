@@ -37,6 +37,8 @@ public partial class PlayerPage : UserControl
     private Dictionary<int, (string? lang, string? title)> _audioTrackInfo = new();
     private Dictionary<int, (string? lang, string? title)> _subtitleTrackInfo = new();
     private bool _vsyncEnabled;
+    private int _audioDelayMs = 0;
+    private int _subDelayMs = 0;
 
     // State management
     private IWatchProgressService? _watchProgressService;
@@ -75,6 +77,8 @@ public partial class PlayerPage : UserControl
         PlayerControlsControl.RewindClicked += (s, e) => SeekBackButton_Click(s, null!);
         PlayerControlsControl.FastForwardClicked += (s, e) => SeekForwardButton_Click(s, null!);
         PlayerControlsControl.SpeedChanged += (s, speed) => SetOption("speed", speed.ToString("F2", CultureInfo.InvariantCulture));
+        PlayerControlsControl.AudioDelayChanged += (s, delay) => SetProperty("audio-delay", delay.ToString("F3", CultureInfo.InvariantCulture));
+        PlayerControlsControl.SubtitleDelayChanged += (s, delay) => SetProperty("sub-delay", delay.ToString("F3", CultureInfo.InvariantCulture));
         PlayerControlsControl.FullscreenClicked += FullscreenButton_Click;
         PlayerControlsControl.Volume.PropertyChanged += (s, e) =>
         {
@@ -207,6 +211,16 @@ public partial class PlayerPage : UserControl
         Logger.Log($"option {name}={value}: {r}");
     }
 
+    private void SetProperty(string name, string value)
+    {
+        if (_mpvHandle == IntPtr.Zero) return;
+        int r = LibMpvInterop.mpv_set_property_string(
+            _mpvHandle,
+            Encoding.UTF8.GetBytes(name + "\0"),
+            Encoding.UTF8.GetBytes(value + "\0"));
+        Logger.Log($"property {name}={value}: {r}");
+    }
+
     public async Task LoadPlaylistAsync(IReadOnlyList<Episode> playlist, int startIndex)
     {
         Logger.Log($"=== LoadPlaylistAsync: {playlist.Count} episodes, starting at index {startIndex} ===");
@@ -284,8 +298,28 @@ public partial class PlayerPage : UserControl
             case Key.F: FullscreenToggleRequested?.Invoke(); return true;
             case Key.N: NextButton_Click(null, EventArgs.Empty); return true;
             case Key.M: ToggleMute(); return true;
+            case Key.G: AdjustSubtitleDelay(-50); return true;
+            case Key.H: AdjustSubtitleDelay(50); return true;
+            case Key.J: AdjustAudioDelay(-50); return true;
+            case Key.K: AdjustAudioDelay(50); return true;
             default: return false;
         }
+    }
+
+    private void AdjustAudioDelay(int delta)
+    {
+        _audioDelayMs += delta;
+        PlayerControlsControl.SetAudioDelay(_audioDelayMs);
+        SetProperty("audio-delay", (_audioDelayMs / 1000.0).ToString("F3", CultureInfo.InvariantCulture));
+        PlayerControlsControl.SetNowPlaying(_currentEpisode?.DisplayName ?? "No file loaded", $"Audio Delay: {_audioDelayMs}ms");
+    }
+
+    private void AdjustSubtitleDelay(int delta)
+    {
+        _subDelayMs += delta;
+        PlayerControlsControl.SetSubtitleDelay(_subDelayMs);
+        SetProperty("sub-delay", (_subDelayMs / 1000.0).ToString("F3", CultureInfo.InvariantCulture));
+        PlayerControlsControl.SetNowPlaying(_currentEpisode?.DisplayName ?? "No file loaded", $"Subtitle Delay: {_subDelayMs}ms");
     }
 
     private void SeekRelative(double seconds)
@@ -1138,6 +1172,10 @@ public partial class PlayerPage : UserControl
         }
 
         _currentEpisode = null;
+        _audioDelayMs = 0;
+        _subDelayMs = 0;
+        PlayerControlsControl.SetAudioDelay(0);
+        PlayerControlsControl.SetSubtitleDelay(0);
         PlayerControlsControl.SetNowPlaying("No file loaded", "Stopped");
         AudioTracksPanel.Children.Clear();
         SubtitleTracksPanel.Children.Clear();

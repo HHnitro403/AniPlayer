@@ -14,10 +14,15 @@ public partial class PlayerControls : UserControl
     public event EventHandler? RewindClicked;
     public event EventHandler? FastForwardClicked;
     public event EventHandler<double>? SpeedChanged;
+    public event EventHandler<double>? AudioDelayChanged;
+    public event EventHandler<double>? SubtitleDelayChanged;
     public event EventHandler? FullscreenClicked;
     
     public Slider Progress => ProgressSlider;
     public Slider Volume => VolumeSlider;
+
+    private int _audioDelayMs = 0;
+    private int _subDelayMs = 0;
 
     public PlayerControls()
     {
@@ -29,6 +34,12 @@ public partial class PlayerControls : UserControl
         RewindButton.Click += (s, e) => RewindClicked?.Invoke(this, e);
         FastForwardButton.Click += (s, e) => FastForwardClicked?.Invoke(this, e);
         FullscreenButton.Click += (s, e) => FullscreenClicked?.Invoke(this, e);
+
+        AudioDelayMinusButton.Click += (s, e) => AdjustAudioDelay(-50);
+        AudioDelayPlusButton.Click += (s, e) => AdjustAudioDelay(50);
+        SubDelayMinusButton.Click += (s, e) => AdjustSubDelay(-50);
+        SubDelayPlusButton.Click += (s, e) => AdjustSubDelay(50);
+
         SpeedSelector.SelectionChanged += (s, e) =>
         {
             if (SpeedSelector.SelectedItem is ComboBoxItem item &&
@@ -38,6 +49,32 @@ public partial class PlayerControls : UserControl
                 SpeedChanged?.Invoke(this, speed);
             }
         };
+    }
+
+    private void AdjustAudioDelay(int delta)
+    {
+        _audioDelayMs += delta;
+        AudioDelayText.Text = _audioDelayMs.ToString();
+        AudioDelayChanged?.Invoke(this, _audioDelayMs / 1000.0);
+    }
+
+    private void AdjustSubDelay(int delta)
+    {
+        _subDelayMs += delta;
+        SubDelayText.Text = _subDelayMs.ToString();
+        SubtitleDelayChanged?.Invoke(this, _subDelayMs / 1000.0);
+    }
+
+    public void SetAudioDelay(int ms)
+    {
+        _audioDelayMs = ms;
+        AudioDelayText.Text = _audioDelayMs.ToString();
+    }
+
+    public void SetSubtitleDelay(int ms)
+    {
+        _subDelayMs = ms;
+        SubDelayText.Text = _subDelayMs.ToString();
     }
 
     public void SetPlayState(bool isPlaying)
