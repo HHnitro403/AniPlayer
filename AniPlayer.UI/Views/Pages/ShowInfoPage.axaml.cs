@@ -144,26 +144,103 @@ public partial class ShowInfoPage : UserControl
             }
         }
 
-        // Group episodes into seasons
+        // Group episodes into seasons, then sub-group by episode type within each season
         SeasonGroups.Clear();
         var episodesBySeason = allEpisodes.GroupBy(e => e.SeriesId).ToDictionary(g => g.Key, g => g.ToList());
 
         foreach (var series in sortedSeries)
         {
-            if (episodesBySeason.TryGetValue(series.Id, out var episodes))
+            if (!episodesBySeason.TryGetValue(series.Id, out var episodes)) continue;
+
+            // Build the base season header
+            string baseHeader;
+            if (series.SeasonNumber == 0)
+                baseHeader = "Specials / OVAs";
+            else if (EpisodeParser.TryParseSeasonFromFolder(series.FolderName, out _))
+                baseHeader = $"Season {series.SeasonNumber}";
+            else
+                baseHeader = series.FolderName; // Non-standard name (e.g. "New", "BorN", "Hero")
+
+            // Split by episode type
+            var regularEpisodes = episodes
+                .Where(e => e.EpisodeType == EpisodeTypes.Episode)
+                .OrderBy(e => e.EpisodeNumber).ToList();
+            var ovaEpisodes = episodes
+                .Where(e => e.EpisodeType == EpisodeTypes.Ova || e.EpisodeType == EpisodeTypes.Oad)
+                .OrderBy(e => e.EpisodeNumber).ToList();
+            var specialEpisodes = episodes
+                .Where(e => e.EpisodeType == EpisodeTypes.Special)
+                .OrderBy(e => e.EpisodeNumber).ToList();
+            var ncopEpisodes = episodes
+                .Where(e => e.EpisodeType == EpisodeTypes.Ncop)
+                .OrderBy(e => e.EpisodeNumber).ToList();
+            var ncedEpisodes = episodes
+                .Where(e => e.EpisodeType == EpisodeTypes.Nced)
+                .OrderBy(e => e.EpisodeNumber).ToList();
+
+            // Regular episodes (always first, always expanded)
+            if (regularEpisodes.Any())
             {
-                string header;
-                if (series.SeasonNumber == 0)
-                    header = "Specials / OVAs";
-                else if (EpisodeParser.TryParseSeasonFromFolder(series.FolderName, out _))
-                    header = $"Season {series.SeasonNumber}";
-                else
-                    header = series.FolderName; // Non-standard name (e.g. "New", "BorN", "Hero")
                 SeasonGroups.Add(new SeasonGroup
                 {
-                    Header = header,
+                    Header = baseHeader,
+                    Episodes = regularEpisodes,
+                    IsExpanded = true
+                });
+            }
+            else if (!ovaEpisodes.Any() && !specialEpisodes.Any() && !ncopEpisodes.Any() && !ncedEpisodes.Any())
+            {
+                // No typed episodes at all — show the season row so it isn't invisible
+                SeasonGroups.Add(new SeasonGroup
+                {
+                    Header = baseHeader,
                     Episodes = episodes.OrderBy(e => e.EpisodeNumber).ToList(),
-                    IsExpanded = true // All seasons expanded by default
+                    IsExpanded = true
+                });
+                continue;
+            }
+
+            // OVAs / OADs (collapsed by default to reduce noise)
+            if (ovaEpisodes.Any())
+            {
+                SeasonGroups.Add(new SeasonGroup
+                {
+                    Header = series.SeasonNumber > 0 ? $"{baseHeader} — OVAs" : "OVAs / OADs",
+                    Episodes = ovaEpisodes,
+                    IsExpanded = false
+                });
+            }
+
+            // Specials (collapsed)
+            if (specialEpisodes.Any())
+            {
+                SeasonGroups.Add(new SeasonGroup
+                {
+                    Header = series.SeasonNumber > 0 ? $"{baseHeader} — Specials" : "Specials",
+                    Episodes = specialEpisodes,
+                    IsExpanded = false
+                });
+            }
+
+            // Clean Openings (collapsed)
+            if (ncopEpisodes.Any())
+            {
+                SeasonGroups.Add(new SeasonGroup
+                {
+                    Header = series.SeasonNumber > 0 ? $"{baseHeader} — Clean Openings" : "Clean Openings",
+                    Episodes = ncopEpisodes,
+                    IsExpanded = false
+                });
+            }
+
+            // Clean Endings (collapsed)
+            if (ncedEpisodes.Any())
+            {
+                SeasonGroups.Add(new SeasonGroup
+                {
+                    Header = series.SeasonNumber > 0 ? $"{baseHeader} — Clean Endings" : "Clean Endings",
+                    Episodes = ncedEpisodes,
+                    IsExpanded = false
                 });
             }
         }

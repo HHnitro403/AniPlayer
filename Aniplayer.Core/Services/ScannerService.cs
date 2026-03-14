@@ -263,6 +263,17 @@ public class ScannerService : IScannerService
 
             // Try to detect type from filename (e.g. "Nced-1.mkv" in an Extra folder)
             var fileType = EpisodeTypes.FromFileName(fileName);
+
+            // If filename gives no hint and folder type is EPISODE, check the immediate parent
+            // folder name as a secondary signal (safety net for edge cases)
+            if (fileType == null && episodeType == EpisodeTypes.Episode)
+            {
+                var parentFolderName = Path.GetFileName(Path.GetDirectoryName(file) ?? "");
+                var parentType = EpisodeTypes.FromFolderName(parentFolderName);
+                if (parentType != EpisodeTypes.Episode)
+                    fileType = parentType;
+            }
+
             if (fileType == null)
             {
                 fileType = episodeType; // Fall back to folder type

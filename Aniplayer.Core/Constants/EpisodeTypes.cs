@@ -27,16 +27,36 @@ public static class EpisodeTypes
         (new Regex(@"\b(?:NCOP)\s*$", RegexOptions.IgnoreCase | RegexOptions.Compiled), Ncop),
         (new Regex(@"\b(?:NCED)\s*$", RegexOptions.IgnoreCase | RegexOptions.Compiled), Nced),
         (new Regex(@"\b(?:Extras?)\s*$", RegexOptions.IgnoreCase | RegexOptions.Compiled), Special),
+        (new Regex(@"\b(?:Bonus(?:es)?)\s*$", RegexOptions.IgnoreCase | RegexOptions.Compiled), Special),
+        (new Regex(@"\bPV\s*$", RegexOptions.IgnoreCase | RegexOptions.Compiled), Special),
     };
 
     // Patterns for detecting type from individual filenames
     private static readonly (Regex pattern, string type)[] FileNamePatterns =
     {
-        (new Regex(@"\bNCED\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), Nced),
-        (new Regex(@"\bNCOP\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), Ncop),
+        // NCED/NCOP: \d* handles both bare ("NCED") and numbered ("NCED1") forms
+        (new Regex(@"\bNCED\d*\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), Nced),
+        (new Regex(@"\bNCOP\d*\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), Ncop),
         (new Regex(@"\bOVA\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), Ova),
         (new Regex(@"\bOAD\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), Oad),
+        // Numbered Special/SP (e.g. "Special 1", "SP1", "SP 2")
         (new Regex(@"\b(?:Special|SP)\s*\d", RegexOptions.IgnoreCase | RegexOptions.Compiled), Special),
+        // Un-numbered "Special" or "Specials" (must come after the numbered pattern)
+        (new Regex(@"\bSpecials?\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), Special),
+        // Bare "SP" not followed by a digit (e.g. "Show - SP [tags].mkv")
+        (new Regex(@"[-\s_]SP\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), Special),
+        // Creditless/clean OP and ED variants
+        (new Regex(@"\bCreditless\s*(?:OP|Opening|ED|Ending)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), Special),
+        (new Regex(@"\bClean\s*(?:OP|Opening|ED|Ending)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), Special),
+        // Promotional videos and commercials (e.g. "PV1", "CM 2")
+        (new Regex(@"\b(?:PV|CM)\s*\d*\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), Special),
+        // Trailers and previews
+        (new Regex(@"\b(?:Trailer|Preview)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), Special),
+        // Extra/bonus files (e.g. "Extra 1", "Extra")
+        (new Regex(@"\bExtra\s*\d*\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), Special),
+        // BD/Blu-ray specials and bonuses
+        (new Regex(@"\bBD\s*Special\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), Special),
+        (new Regex(@"\bBlu-?ray\s*(?:Special|Bonus)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), Special),
     };
 
     /// <summary>

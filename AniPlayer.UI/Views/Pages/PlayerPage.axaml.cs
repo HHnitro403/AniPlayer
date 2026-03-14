@@ -331,29 +331,20 @@ public partial class PlayerPage : UserControl
 
     private async Task ChangeToEpisodeAsync(Episode newEpisode, bool isInitialLoad = false)
     {
-        if (Interlocked.CompareExchange(ref _isTransitioning, 1, 0) != 0) return;
-
-        try
+        if (!isInitialLoad && _currentEpisode != null && _currentEpisode.Id != newEpisode.Id)
         {
-            if (!isInitialLoad && _currentEpisode != null && _currentEpisode.Id != newEpisode.Id)
-            {
-                Logger.Log($"[State] Saving progress for old episode {_currentEpisode.Id} before changing.");
-                await SaveCurrentProgressAsync(force: true);
-            }
-
-            Logger.Log($"[State] Changing to new episode {newEpisode.Id} ('{newEpisode.FilePath}')");
-            _currentEpisode = newEpisode;
-            _playlistIndex = _playlist.ToList().FindIndex(e => e.Id == newEpisode.Id);
-            _isCurrentEpisodeCompleted = false; // Reset completion latch for new episode
-
-            await LoadFileIntoMpvAsync(newEpisode.FilePath);
-
-            PlayerControlsControl.SetNextEnabled(_playlistIndex < _playlist.Count - 1);
+            Logger.Log($"[State] Saving progress for old episode {_currentEpisode.Id} before changing.");
+            await SaveCurrentProgressAsync(force: true);
         }
-        finally
-        {
-            Interlocked.Exchange(ref _isTransitioning, 0);
-        }
+
+        Logger.Log($"[State] Changing to new episode {newEpisode.Id} ('{newEpisode.FilePath}')");
+        _currentEpisode = newEpisode;
+        _playlistIndex = _playlist.ToList().FindIndex(e => e.Id == newEpisode.Id);
+        _isCurrentEpisodeCompleted = false; // Reset completion latch for new episode
+
+        await LoadFileIntoMpvAsync(newEpisode.FilePath);
+
+        PlayerControlsControl.SetNextEnabled(_playlistIndex < _playlist.Count - 1);
     }
 
     private async Task LoadFileIntoMpvAsync(string filePath)
