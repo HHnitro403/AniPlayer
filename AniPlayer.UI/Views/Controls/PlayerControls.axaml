@@ -84,6 +84,33 @@
                         <ComboBoxItem Content="1.5x" Tag="1.5"/>
                         <ComboBoxItem Content="2x" Tag="2.0"/>
                     </ComboBox>
+
+                    <Button x:Name="SyncButton" Width="32" Height="32" Padding="0" Background="Transparent" Focusable="False" ToolTip.Tip="Sync Options">
+                        <PathIcon Data="{DynamicResource IconSync}" Width="14" Height="14"/>
+                        <Button.Flyout>
+                            <Flyout Placement="Top">
+                                <StackPanel Spacing="12" Width="200">
+                                    <StackPanel Spacing="4">
+                                        <TextBlock Text="Audio Delay (ms)" FontSize="11" Foreground="{DynamicResource TextSecondary}"/>
+                                        <Grid ColumnDefinitions="Auto,*,Auto">
+                                            <Button x:Name="AudioDelayMinusButton" Content="-" Width="32" Height="32" Focusable="False"/>
+                                            <TextBlock x:Name="AudioDelayText" Grid.Column="1" Text="0" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                            <Button x:Name="AudioDelayPlusButton" Grid.Column="2" Content="+" Width="32" Height="32" Focusable="False"/>
+                                        </Grid>
+                                    </StackPanel>
+
+                                    <StackPanel Spacing="4">
+                                        <TextBlock Text="Subtitle Delay (ms)" FontSize="11" Foreground="{DynamicResource TextSecondary}"/>
+                                        <Grid ColumnDefinitions="Auto,*,Auto">
+                                            <Button x:Name="SubDelayMinusButton" Content="-" Width="32" Height="32" Focusable="False"/>
+                                            <TextBlock x:Name="SubDelayText" Grid.Column="1" Text="0" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                            <Button x:Name="SubDelayPlusButton" Grid.Column="2" Content="+" Width="32" Height="32" Focusable="False"/>
+                                        </Grid>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Flyout>
+                        </Button.Flyout>
+                    </Button>
                     
                     <Button x:Name="FullscreenButton" Width="32" Height="32" Padding="0" Background="Transparent" Focusable="False">
                         <PathIcon Data="{DynamicResource IconFullscreen}" Width="14" Height="14"/>
