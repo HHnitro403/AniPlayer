@@ -4,9 +4,11 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using Aniplayer.Core.Constants;
+using Aniplayer.Core.Helpers;
 using Aniplayer.Core.Interfaces;
 using Aniplayer.Core.Models;
 using Microsoft.Extensions.Logging;
+using System.Net.Http;
 
 namespace Aniplayer.Core.Services;
 
@@ -14,7 +16,10 @@ public class MetadataService : IMetadataService
 {
     private readonly ILibraryService _library;
     private readonly ILogger<MetadataService> _logger;
-    private readonly HttpClient _http;
+    private readonly IHttpClientFactory _httpClientFactory;
+
+    private readonly SemaphoreSlim _semaphore = new(1, 1);
+    private DateTime _lastRequestTime = DateTime.MinValue;
 
     private const string SearchQuery = @"
         query ($search: String) {
@@ -31,22 +36,40 @@ public class MetadataService : IMetadataService
           }
         }";
 
-    public MetadataService(ILibraryService library, ILogger<MetadataService> logger)
+    public MetadataService(ILibraryService library, ILogger<MetadataService> logger, IHttpClientFactory httpClientFactory)
     {
         _library = library;
         _logger = logger;
-        _http = new HttpClient
-        {
-            Timeout = TimeSpan.FromSeconds(AppConstants.AniListTimeoutSeconds)
-        };
+        _httpClientFactory = httpClientFactory;
     }
 
     public async Task<AniListMetadata?> SearchAsync(string title, CancellationToken ct = default)
     {
+        await _semaphore.WaitAsync(ct);
         try
         {
+            var elapsed = DateTime.UtcNow - _lastRequestTime;
+            if (elapsed.TotalMilliseconds < 1000)
+            {
+                await Task.Delay(1000 - (int)elapsed.TotalMilliseconds, ct);
+            }
+            _lastRequestTime = DateTime.UtcNow;
+
+            var http = _httpClientFactory.CreateClient("anilist");
             var payload = new { query = SearchQuery, variables = new { search = title } };
-            var response = await _http.PostAsJsonAsync(AppConstants.AniListEndpoint, payload, ct);
+            var response = await http.PostAsJsonAsync(AppConstants.AniListEndpoint, payload, ct);
+
+            // Handle HTTP 429 (Too Many Requests) with retry
+            if (response.StatusCode == HttpStatusCode.TooManyRequests)
+            {
+                var retryAfter = response.Headers.RetryAfter?.Delta ?? TimeSpan.FromSeconds(60);
+                _logger.LogWarning("AniList rate limit hit for '{Title}', retrying after {Seconds}s",
+                    title, retryAfter.TotalSeconds);
+                await Task.Delay(retryAfter, ct);
+
+                // Retry once
+                response = await http.PostAsJsonAsync(AppConstants.AniListEndpoint, payload, ct);
+            }
 
             if (!response.IsSuccessStatusCode)
             {
@@ -81,6 +104,10 @@ public class MetadataService : IMetadataService
             _logger.LogError(ex, "AniList search failed for '{Title}'", title);
             return null;
         }
+        finally
+        {
+            _semaphore.Release();
+        }
     }
 
     public async Task ApplyMetadataToSeriesAsync(int seriesId, CancellationToken ct = default)
@@ -92,8 +119,7 @@ public class MetadataService : IMetadataService
         var metadata = await SearchAsync(searchTitle, ct);
         if (metadata == null)
         {
-            _logger.LogInformation("No AniList match for '{SearchTitle}' (folder: '{FolderName}')",
-                searchTitle, series.FolderName);
+            _logger.LogInformation("[Metadata] No match found for '{Title}'", searchTitle);
             return;
         }
 
@@ -130,7 +156,8 @@ public class MetadataService : IMetadataService
             if (string.IsNullOrEmpty(ext)) ext = ".jpg";
             var localPath = Path.Combine(AppConstants.CoversPath, $"{seriesId}{ext}");
 
-            var bytes = await _http.GetByteArrayAsync(imageUrl, ct);
+            var http = _httpClientFactory.CreateClient("anilist");
+            var bytes = await http.GetByteArrayAsync(imageUrl, ct);
             await File.WriteAllBytesAsync(localPath, bytes, ct);
 
             _logger.LogInformation("Downloaded cover for series {Id} to {Path}", seriesId, localPath);
@@ -191,20 +218,11 @@ public class MetadataService : IMetadataService
 
     private static string CleanTitleForSearch(string title)
     {
-        // Strip leading [Group] tags (e.g. "[SubGroup] Title")
-        var cleaned = Regex.Replace(title, @"^\[.*?\]\s*", "");
-
-        // Strip common suffixes that break AniList matching
-        cleaned = Regex.Replace(cleaned, @"\s+(?:Season|Part|Cour|S)\s*\d+$", "", RegexOptions.IgnoreCase);
-        cleaned = Regex.Replace(cleaned, @"\s+\(.*?\)\s*$", ""); // "(Dub)", "(2024)"
-
-        // Strip trailing quality/resolution tags (e.g. "1080p", "BD", "BluRay")
-        cleaned = Regex.Replace(cleaned, @"\s+(?:\d{3,4}p|BD|BluRay|BDRip|WEB-?DL|WEBRip)\s*$", "", RegexOptions.IgnoreCase);
-
-        // Strip trailing separator + number patterns (e.g. "- 01", "- S01E01")
-        cleaned = Regex.Replace(cleaned, @"\s*[-–—]\s*(?:S\d+E\d+|\d+)\s*$", "", RegexOptions.IgnoreCase);
-
-        return cleaned.Trim();
+        var cleaned = EpisodeParser.CleanSeriesTitle(title);
+        // Strip any remaining trailing parenthetical groups (e.g. "(Lelouch of the Rebellion)", "(TV)")
+        // so the AniList search query is as clean as possible
+        cleaned = Regex.Replace(cleaned, @"\s*\([^)]*\)\s*$", "").Trim();
+        return cleaned;
     }
 
     // ── AniList JSON response mapping ────────────────────────────

@@ -19,22 +19,10 @@ public partial class Sidebar : UserControl
 
     public void SetActive(string page)
     {
-        var activeBrush = new SolidColorBrush(Color.Parse("#E0E0FF"));
-        var inactiveBrush = new SolidColorBrush(Color.Parse("#AAAACC"));
-        var activeWeight = FontWeight.SemiBold;
-        var normalWeight = FontWeight.Normal;
-
-        HomeButton.Foreground = page == "Home" ? activeBrush : inactiveBrush;
-        HomeButton.FontWeight = page == "Home" ? activeWeight : normalWeight;
-
-        LibraryButton.Foreground = page == "Library" ? activeBrush : inactiveBrush;
-        LibraryButton.FontWeight = page == "Library" ? activeWeight : normalWeight;
-
-        PlayerButton.Foreground = page == "Player" ? activeBrush : inactiveBrush;
-        PlayerButton.FontWeight = page == "Player" ? activeWeight : normalWeight;
-
-        SettingsButton.Foreground = page == "Settings" ? activeBrush : inactiveBrush;
-        SettingsButton.FontWeight = page == "Settings" ? activeWeight : normalWeight;
+        HomeButton.Classes.Set("NavActive", page == "Home");
+        LibraryButton.Classes.Set("NavActive", page == "Library");
+        PlayerButton.Classes.Set("NavActive", page == "Player");
+        SettingsButton.Classes.Set("NavActive", page == "Settings");
     }
 
     private void HomeButton_Click(object? sender, RoutedEventArgs e) => HomeClicked?.Invoke();

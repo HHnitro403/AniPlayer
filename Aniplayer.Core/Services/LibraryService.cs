@@ -181,9 +181,12 @@ public class LibraryService : ILibraryService
     public async Task UpsertSeriesAudioPreferenceAsync(int seriesId, string audioLanguage, string? audioTitle, int? audioTrackId = null)
     {
         using var conn = _db.CreateConnection();
+        // Preserve existing subtitle preferences so saving audio doesn't wipe them out
+        var existing = await GetSeriesTrackPreferenceAsync(seriesId);
         await conn.ExecuteAsync(
             Queries.UpsertSeriesTrackPreference,
-            new { seriesId, audioLang = audioLanguage, audioTitle, audioTrackId, subLang = (string?)null, subName = (string?)null });
+            new { seriesId, audioLang = audioLanguage, audioTitle, audioTrackId,
+                  subLang = existing?.PreferredSubtitleLanguage, subName = existing?.PreferredSubtitleName });
     }
 
     public async Task UpsertSeriesSubtitlePreferenceAsync(int seriesId, string subtitleLanguage, string? subtitleName)

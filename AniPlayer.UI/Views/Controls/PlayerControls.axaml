@@ -2,7 +2,122 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+             mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="120"
              x:Class="AniPlayer.UI.PlayerControls">
-  Welcome to Avalonia!
+
+    <Border Background="{DynamicResource BgSurface}"
+            BorderBrush="{DynamicResource BgBase}"
+            BorderThickness="0,1,0,0"
+            Padding="20,16">
+        <Grid RowDefinitions="Auto,Auto">
+            
+            <!-- Row 0: Progress Bar -->
+            <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,16">
+                <TextBlock x:Name="TimeCurrentText" Text="0:00"
+                           Foreground="{DynamicResource TextSecondary}" FontSize="12" FontWeight="Medium"
+                           VerticalAlignment="Center" Margin="0,0,12,0"/>
+                
+                <Slider x:Name="ProgressSlider" Grid.Column="1"
+                        Minimum="0" Maximum="100" Value="0"
+                        VerticalAlignment="Center"
+                        Focusable="False"/>
+                
+                <TextBlock x:Name="TimeTotalText" Text="0:00"
+                           Foreground="{DynamicResource TextSecondary}" FontSize="12" FontWeight="Medium"
+                           VerticalAlignment="Center" Margin="12,0,0,0" Grid.Column="2"/>
+            </Grid>
+
+            <!-- Row 1: Controls -->
+            <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto">
+                
+                <!-- Left: Transport -->
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <Button x:Name="PreviousButton" Width="32" Height="32" Padding="0" Background="Transparent" ToolTip.Tip="Previous Episode" Focusable="False">
+                        <PathIcon Data="{DynamicResource IconPrevious}" Width="14" Height="14"/>
+                    </Button>
+
+                    <Button x:Name="RewindButton" Width="32" Height="32" Padding="0" Background="Transparent" ToolTip.Tip="Rewind 5s" Focusable="False">
+                        <PathIcon Data="{DynamicResource IconRewind}" Width="14" Height="14"/>
+                    </Button>
+
+                    <Button x:Name="PlayPauseButton" Classes="Primary" Width="40" Height="40" Padding="0" CornerRadius="20" ToolTip.Tip="Play/Pause" Focusable="False">
+                        <PathIcon x:Name="PlayPauseIcon" Data="{DynamicResource IconPlay}" Width="16" Height="16" Foreground="White"/>
+                    </Button>
+
+                    <Button x:Name="StopButton" Width="32" Height="32" Padding="0" Background="Transparent" ToolTip.Tip="Stop" Focusable="False">
+                        <PathIcon Data="{DynamicResource IconStop}" Width="14" Height="14"/>
+                    </Button>
+
+                    <Button x:Name="FastForwardButton" Width="32" Height="32" Padding="0" Background="Transparent" ToolTip.Tip="Fast Forward 5s" Focusable="False">
+                        <PathIcon Data="{DynamicResource IconFastForward}" Width="14" Height="14"/>
+                    </Button>
+
+                    <Button x:Name="NextButton" Width="32" Height="32" Padding="0" Background="Transparent" ToolTip.Tip="Next Episode" Focusable="False">
+                        <PathIcon Data="{DynamicResource IconNext}" Width="14" Height="14"/>
+                    </Button>
+                </StackPanel>
+
+                <!-- Center: Now Playing -->
+                <StackPanel Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="2">
+                    <TextBlock x:Name="NowPlayingText"
+                               Text="No file loaded"
+                               Foreground="{DynamicResource TextPrimary}" FontSize="13" FontWeight="SemiBold"
+                               TextTrimming="CharacterEllipsis" MaxWidth="400" TextAlignment="Center"/>
+                    <TextBlock x:Name="StatusText" Text="Stopped"
+                               Foreground="{DynamicResource TextSecondary}" FontSize="11" Opacity="0.6"
+                               TextAlignment="Center"/>
+                </StackPanel>
+
+                <!-- Right: Volume & Options -->
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="16" HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                        <TextBlock Text="Audio" Foreground="{DynamicResource TextSecondary}" FontSize="11" VerticalAlignment="Center"/>
+                        <PathIcon Data="{DynamicResource IconVolume}" Width="16" Height="16" Foreground="{DynamicResource TextSecondary}"/>
+                        <Slider x:Name="VolumeSlider" Width="80" Minimum="0" Maximum="150" Value="100" Focusable="False"/>
+                    </StackPanel>
+                    
+                    <ComboBox x:Name="SpeedSelector" SelectedIndex="2" Width="80" Background="Transparent" BorderThickness="0" Focusable="False" VerticalAlignment="Center">
+                        <ComboBoxItem Content="0.5x" Tag="0.5"/>
+                        <ComboBoxItem Content="0.75x" Tag="0.75"/>
+                        <ComboBoxItem Content="1x" Tag="1.0"/>
+                        <ComboBoxItem Content="1.25x" Tag="1.25"/>
+                        <ComboBoxItem Content="1.5x" Tag="1.5"/>
+                        <ComboBoxItem Content="2x" Tag="2.0"/>
+                    </ComboBox>
+
+                    <Button x:Name="SyncButton" Width="32" Height="32" Padding="0" Background="Transparent" Focusable="False" ToolTip.Tip="Sync Options">
+                        <PathIcon Data="{DynamicResource IconSync}" Width="14" Height="14"/>
+                        <Button.Flyout>
+                            <Flyout Placement="Top">
+                                <StackPanel Spacing="12" Width="200">
+                                    <StackPanel Spacing="4">
+                                        <TextBlock Text="Audio Delay (ms)" FontSize="11" Foreground="{DynamicResource TextSecondary}"/>
+                                        <Grid ColumnDefinitions="Auto,*,Auto">
+                                            <Button x:Name="AudioDelayMinusButton" Content="-" Width="32" Height="32" Focusable="False"/>
+                                            <TextBlock x:Name="AudioDelayText" Grid.Column="1" Text="0" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                            <Button x:Name="AudioDelayPlusButton" Grid.Column="2" Content="+" Width="32" Height="32" Focusable="False"/>
+                                        </Grid>
+                                    </StackPanel>
+
+                                    <StackPanel Spacing="4">
+                                        <TextBlock Text="Subtitle Delay (ms)" FontSize="11" Foreground="{DynamicResource TextSecondary}"/>
+                                        <Grid ColumnDefinitions="Auto,*,Auto">
+                                            <Button x:Name="SubDelayMinusButton" Content="-" Width="32" Height="32" Focusable="False"/>
+                                            <TextBlock x:Name="SubDelayText" Grid.Column="1" Text="0" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                            <Button x:Name="SubDelayPlusButton" Grid.Column="2" Content="+" Width="32" Height="32" Focusable="False"/>
+                                        </Grid>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Flyout>
+                        </Button.Flyout>
+                    </Button>
+                    
+                    <Button x:Name="FullscreenButton" Width="32" Height="32" Padding="0" Background="Transparent" Focusable="False">
+                        <PathIcon Data="{DynamicResource IconFullscreen}" Width="14" Height="14"/>
+                    </Button>
+                </StackPanel>
+                
+            </Grid>
+        </Grid>
+    </Border>
 </UserControl>

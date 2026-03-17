@@ -1,0 +1,41 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="600"
+             x:Class="AniPlayer.UI.FirstRunPage">
+
+    <Grid>
+        <!-- Background decorative elements? Or just clean surface -->
+        
+        <Border Background="{DynamicResource BgCard}"
+                CornerRadius="{DynamicResource RadiusL}"
+                Padding="48"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                BoxShadow="0 12 32 0 #44000000"
+                MaxWidth="500">
+            <StackPanel Spacing="24">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="Welcome to AniPlayer"
+                               FontSize="32" FontWeight="Bold"
+                               HorizontalAlignment="Center"
+                               Foreground="{DynamicResource TextPrimary}"/>
+                    <TextBlock Text="Let's add your anime folder to get started."
+                               FontSize="16" Opacity="0.7"
+                               HorizontalAlignment="Center"
+                               Foreground="{DynamicResource TextPrimary}"
+                               TextAlignment="Center"/>
+                </StackPanel>
+
+                <Button x:Name="AddFolderButton"
+                        Content="Add Library Folder"
+                        Classes="Primary"
+                        Padding="32,16"
+                        FontSize="16"
+                        HorizontalAlignment="Center"
+                        Click="AddFolderButton_Click"/>
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>

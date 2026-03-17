@@ -1,4 +1,6 @@
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Threading;
 using Avalonia.Input;
 using Microsoft.Extensions.DependencyInjection;
 using Aniplayer.Core.Interfaces;
@@ -9,27 +11,46 @@ using System.ComponentModel;
 using System.Linq;
 using System.Threading.Tasks;
 using Aniplayer.Core.Constants;
+using Avalonia.Interactivity;
 
 namespace AniPlayer.UI
 {
     public partial class MainWindow : Window
     {
+        private static MainWindow? _instance;
+
         private readonly HomePage _homePage;
         private readonly LibraryPage _libraryPage;
         private readonly PlayerPage _playerPage;
         private readonly ShowInfoPage _showInfoPage;
         private readonly OptionsPage _optionsPage;
+        private readonly FirstRunPage _firstRunPage;
         
         private readonly ILibraryService _libraryService;
         private readonly IScannerService _scannerService;
         private readonly IFolderWatcherService _folderWatcher;
         private readonly IWatchProgressService _watchProgressService;
+        private readonly IMetadataService _metadataService;
         
         private IReadOnlyList<Episode> _currentPlaylist = new List<Episode>();
         private bool _isFullscreen;
 
+        public static void ShowToast(string message, bool isError = false)
+        {
+            Dispatcher.UIThread.Post(() => _instance?.ShowToastInternal(message, isError));
+        }
+
+        private void ShowToastInternal(string message, bool isError)
+        {
+            var toast = new Toast();
+            toast.Dismissed += t => ToastContainer.Children.Remove(t);
+            ToastContainer.Children.Add(toast);
+            toast.Show(message, isError);
+        }
+
         public MainWindow()
         {
+            _instance = this;
             Logger.Log("MainWindow constructor called");
             InitializeComponent();
             
@@ -37,20 +58,25 @@ namespace AniPlayer.UI
             _scannerService       = App.Services.GetRequiredService<IScannerService>();
             _folderWatcher        = App.Services.GetRequiredService<IFolderWatcherService>();
             _watchProgressService = App.Services.GetRequiredService<IWatchProgressService>();
+            _metadataService      = App.Services.GetRequiredService<IMetadataService>();
             
             _homePage = new HomePage();
             _libraryPage = new LibraryPage();
             _playerPage = new PlayerPage();
             _showInfoPage = new ShowInfoPage();
             _optionsPage = new OptionsPage();
+            _firstRunPage = new FirstRunPage();
 
             WireEvents();
+            // Start at Home, InitializeAsync will redirect if needed
             NavigateTo("Home");
             
             _ = InitializeAsync();
 
             Closing += MainWindow_Closing;
-            KeyDown += OnMainWindowKeyDown;
+            // Use Tunnel (Preview) phase so this handler fires BEFORE the focused element sees the key.
+            // This prevents sidebar/control buttons from activating via Space when the player is open.
+            AddHandler(KeyDownEvent, OnMainWindowKeyDown, RoutingStrategies.Tunnel);
             Logger.Log("MainWindow constructor completed");
         }
         
@@ -61,17 +87,34 @@ namespace AniPlayer.UI
             if (page != "Player" && PageHost.Content == _playerPage)
                 _playerPage.PausePlayback();
 
-            PageHost.Content = page switch
+            Control newContent = page switch
             {
                 "Home"     => _homePage,
                 "Library"  => _libraryPage,
                 "Player"   => _playerPage,
                 "ShowInfo" => _showInfoPage,
                 "Settings" => _optionsPage,
+                "FirstRun" => _firstRunPage,
                 _          => _homePage
             };
+            
+            PageHost.Content = newContent;
 
-            SidebarControl.SetActive(page);
+            if (newContent != null)
+            {
+                newContent.Focus(); // Ensure keyboard focus moves to new page
+                newContent.Classes.Add("PageEnter");
+                Dispatcher.UIThread.InvokeAsync(async () =>
+                {
+                    await Task.Delay(200);
+                    newContent.Classes.Remove("PageEnter");
+                });
+            }
+
+            // Hide sidebar if in FirstRun
+            SidebarControl.IsVisible = page != "FirstRun" && !_isFullscreen;
+            if (page != "FirstRun")
+                SidebarControl.SetActive(page);
         }
         
         private void WireEvents()
@@ -81,6 +124,11 @@ namespace AniPlayer.UI
             SidebarControl.PlayerClicked  += () => NavigateTo("Player");
             SidebarControl.SettingsClicked += () => NavigateTo("Settings");
             
+            _firstRunPage.FolderSelected += path =>
+            {
+                _ = AddLibraryAsync(path, "FirstRun");
+            };
+
             _homePage.AddLibraryRequested += () => NavigateTo("Settings");
             _homePage.SeriesSelected += seriesId =>
             {
@@ -89,6 +137,10 @@ namespace AniPlayer.UI
             _homePage.ResumeEpisodeRequested += id =>
             {
                 _ = ResumeEpisodeAsync(id);
+            };
+            _homePage.PlayFileRequested += filePath =>
+            {
+                _ = PlaySingleFileAsync(filePath);
             };
             
             _libraryPage.SeriesSelected += groupName =>
@@ -130,7 +182,24 @@ namespace AniPlayer.UI
             {
                 _ = RemoveLibraryAsync(id);
             };
-            
+            _optionsPage.LibraryRescanRequested += async id =>
+            {
+                try
+                {
+                    await RescanLibraryAsync(id);
+                    ShowToast("Library rescanned successfully", false);
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogError($"Rescan failed for library {id}", ex);
+                    ShowToast($"Rescan failed: {ex.Message}", true);
+                }
+                finally
+                {
+                    _optionsPage.HideRescanProgress(id);
+                }
+            };
+
             _scannerService.ScanProgress += msg => Logger.Log($"[Scanner] {msg}", LogRegion.Scanner);
             
             _folderWatcher.LibraryChanged += libraryId =>
@@ -156,18 +225,35 @@ namespace AniPlayer.UI
                     ?? await _libraryService.GetLibraryByPathAsync(path + System.IO.Path.DirectorySeparatorChar);
                 if (existing != null)
                 {
+                    _libraryPage.ShowScanProgress();
                     await _scannerService.ScanLibraryAsync(existing.Id);
+                    _libraryPage.HideScanProgress();
                     await RefreshPagesAsync();
+                    _ = FetchMissingMetadataInBackgroundAsync();
                     return;
                 }
-                
+
                 var label = System.IO.Path.GetFileName(path);
                 var libraryId = await _libraryService.AddLibraryAsync(path, label);
+
+                _libraryPage.ShowScanProgress();
                 await _scannerService.ScanLibraryAsync(libraryId);
+                _libraryPage.HideScanProgress();
+
                 _folderWatcher.WatchLibrary(libraryId, path);
                 await RefreshPagesAsync();
+                _ = FetchMissingMetadataInBackgroundAsync();
+                
+                if (source == "FirstRun")
+                {
+                    NavigateTo("Home");
+                }
             }
-            catch (Exception ex) { Logger.Log($"[AddLibrary] FAILED: {ex.Message}"); }
+            catch (Exception ex) 
+            { 
+                Logger.Log($"[AddLibrary] FAILED: {ex.Message}");
+                ShowToast("Failed to add library", true);
+            }
         }
 
         private async Task RemoveLibraryAsync(int libraryId)
@@ -178,7 +264,11 @@ namespace AniPlayer.UI
                 await _libraryService.DeleteLibraryAsync(libraryId);
                 await RefreshPagesAsync();
             }
-            catch (Exception ex) { Logger.Log($"[RemoveLibrary] Failed: {ex.Message}"); }
+            catch (Exception ex) 
+            { 
+                Logger.Log($"[RemoveLibrary] Failed: {ex.Message}");
+                ShowToast("Failed to remove library", true);
+            }
         }
 
         private async Task OpenSeriesAsync(string seriesGroupName)
@@ -196,10 +286,14 @@ namespace AniPlayer.UI
                 }
                 _currentPlaylist = allEpisodes;
 
-                _showInfoPage.LoadSeriesData(seriesGroup, allEpisodes);
+                await _showInfoPage.LoadSeriesDataAsync(seriesGroup, allEpisodes);
                 NavigateTo("ShowInfo");
             }
-            catch (Exception ex) { Logger.Log($"[OpenSeries] Failed: {ex.Message}"); }
+            catch (Exception ex)
+            {
+                Logger.LogError($"[OpenSeries] Failed: {ex.Message}", ex);
+                ShowToast("Failed to load series data", true);
+            }
         }
 
         private async Task OpenSeriesAsync(int seriesId)
@@ -221,7 +315,7 @@ namespace AniPlayer.UI
             {
                 var episode = await _libraryService.GetEpisodeByIdAsync(episodeId);
                 if (episode == null) return;
-                
+
                 var series = await _libraryService.GetSeriesByIdAsync(episode.SeriesId);
                 if (series?.SeriesGroupName == null) return;
 
@@ -232,7 +326,7 @@ namespace AniPlayer.UI
                     var episodes = (await _libraryService.GetEpisodesBySeriesIdAsync(s.Id)).ToList();
                     allEpisodes.AddRange(episodes.OrderBy(e => e.EpisodeNumber));
                 }
-                
+
                 var index = allEpisodes.FindIndex(e => e.Id == episodeId);
                 if (index >= 0)
                 {
@@ -242,6 +336,39 @@ namespace AniPlayer.UI
                 }
             }
             catch (Exception ex) { Logger.Log($"[ResumeEpisode] Failed: {ex.Message}"); }
+        }
+
+        private async Task PlaySingleFileAsync(string filePath)
+        {
+            try
+            {
+                if (!System.IO.File.Exists(filePath))
+                {
+                    Logger.Log($"[PlaySingleFile] File not found: {filePath}");
+                    ShowToast("File not found", true);
+                    return;
+                }
+
+                Logger.Log($"[PlaySingleFile] Playing standalone file: {filePath}");
+
+                // Create a temporary Episode object for standalone playback
+                var standaloneEpisode = new Episode
+                {
+                    Id = 0, // Not from database
+                    SeriesId = 0,
+                    FilePath = filePath,
+                    Title = System.IO.Path.GetFileNameWithoutExtension(filePath)
+                };
+
+                _currentPlaylist = new List<Episode> { standaloneEpisode };
+                NavigateTo("Player");
+                await _playerPage.LoadPlaylistAsync(_currentPlaylist, 0);
+            }
+            catch (Exception ex)
+            {
+                Logger.Log($"[PlaySingleFile] Failed: {ex.Message}");
+                ShowToast("Failed to play file", true);
+            }
         }
         
         private async Task RefreshPagesAsync()
@@ -277,11 +404,48 @@ namespace AniPlayer.UI
         
         private async Task InitializeAsync()
         {
+            var libraries = await _libraryService.GetAllLibrariesAsync();
+            if (!libraries.Any())
+            {
+                Logger.Log("[Startup] No libraries found, redirecting to First Run");
+                NavigateTo("FirstRun");
+                return;
+            }
+
             await StartFolderWatchersAsync();
             Logger.Log("[Startup] Scanning all libraries...");
-            await _scannerService.ScanAllLibrariesAsync();
-            Logger.Log("[Startup] Startup scan complete");
+            _libraryPage.ShowScanProgress();
+            try
+            {
+                await _scannerService.ScanAllLibrariesAsync();
+                Logger.Log("[Startup] Startup scan complete");
+            }
+            catch (Exception ex)
+            {
+                Logger.Log($"[Startup] Scan failed: {ex.Message}");
+                ShowToast("Startup scan failed", true);
+            }
+            finally
+            {
+                _libraryPage.HideScanProgress();
+            }
             await RefreshPagesAsync();
+            _ = FetchMissingMetadataInBackgroundAsync();
+        }
+
+        private async Task FetchMissingMetadataInBackgroundAsync()
+        {
+            try
+            {
+                Logger.Log("[Metadata] Background fetch started for series without metadata");
+                await _metadataService.FetchAllMissingMetadataAsync();
+                Logger.Log("[Metadata] Background fetch complete");
+                await RefreshPagesAsync();
+            }
+            catch (Exception ex)
+            {
+                Logger.Log($"[Metadata] Background fetch failed: {ex.Message}");
+            }
         }
 
         private async Task StartFolderWatchersAsync()
@@ -299,15 +463,22 @@ namespace AniPlayer.UI
 
         private async Task RescanLibraryAsync(int libraryId)
         {
+            _libraryPage.ShowScanProgress();
             await _scannerService.ScanLibraryAsync(libraryId);
+            _libraryPage.HideScanProgress();
             await RefreshPagesAsync();
+            _ = FetchMissingMetadataInBackgroundAsync();
         }
         
         private void ToggleFullscreen()
         {
             _isFullscreen = !_isFullscreen;
             WindowState = _isFullscreen ? WindowState.FullScreen : WindowState.Normal;
+            // Remove the title-bar margin and collapse the sidebar column in fullscreen
+            MainGrid.Margin = _isFullscreen ? new Thickness(0) : new Thickness(0, 32, 0, 0);
+            MainGrid.ColumnDefinitions[0].Width = _isFullscreen ? new GridLength(0) : new GridLength(240);
             SidebarControl.IsVisible = !_isFullscreen;
+            SidebarSeparator.IsVisible = !_isFullscreen;
             _playerPage.SetFullscreen(_isFullscreen);
             Logger.Log($"Fullscreen: {_isFullscreen}");
         }

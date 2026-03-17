@@ -6,6 +6,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Aniplayer.Core.Constants;
+using Aniplayer.Core.Helpers;
 using Aniplayer.Core.Interfaces;
 using Aniplayer.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
@@ -63,7 +64,7 @@ public partial class ShowInfoPage : UserControl
         }
     }
 
-    public async void LoadSeriesData(List<Series> seriesGroup, List<Episode> allEpisodes)
+    public async Task LoadSeriesDataAsync(List<Series> seriesGroup, List<Episode> allEpisodes)
     {
         _seriesList = seriesGroup; // Store the list for the refresh button
         _allEpisodes = allEpisodes;
@@ -77,7 +78,7 @@ public partial class ShowInfoPage : UserControl
         await LoadTrackPreferencesAsync(representative.Id);
 
         // Header info (from representative series)
-        TitleText.Text = representative.SeriesGroupName;
+        TitleText.Text = representative.DisplayTitle;
         AlternateTitleText.Text = ""; // This might need adjustment if alternate titles are per-season
         AlternateTitleText.IsVisible = false;
         RefreshMetadataButton.IsVisible = true;
@@ -111,8 +112,8 @@ public partial class ShowInfoPage : UserControl
                     Padding = new Thickness(8, 4),
                     Margin = new Thickness(0, 0, 6, 6),
                     CornerRadius = new CornerRadius(4),
-                    Background = new SolidColorBrush(Color.FromArgb(30, 255, 255, 255)),
-                    Child = new TextBlock { Text = genre, FontSize = 12 },
+                    Background = new SolidColorBrush(Color.Parse("#2A2A5A")), // AccentSubtle
+                    Child = new TextBlock { Text = genre, FontSize = 12, Foreground = Brushes.White },
                 });
             }
         }
@@ -143,20 +144,103 @@ public partial class ShowInfoPage : UserControl
             }
         }
 
-        // Group episodes into seasons
+        // Group episodes into seasons, then sub-group by episode type within each season
         SeasonGroups.Clear();
         var episodesBySeason = allEpisodes.GroupBy(e => e.SeriesId).ToDictionary(g => g.Key, g => g.ToList());
 
         foreach (var series in sortedSeries)
         {
-            if (episodesBySeason.TryGetValue(series.Id, out var episodes))
+            if (!episodesBySeason.TryGetValue(series.Id, out var episodes)) continue;
+
+            // Build the base season header
+            string baseHeader;
+            if (series.SeasonNumber == 0)
+                baseHeader = "Specials / OVAs";
+            else if (EpisodeParser.TryParseSeasonFromFolder(series.FolderName, out _))
+                baseHeader = $"Season {series.SeasonNumber}";
+            else
+                baseHeader = series.FolderName; // Non-standard name (e.g. "New", "BorN", "Hero")
+
+            // Split by episode type
+            var regularEpisodes = episodes
+                .Where(e => e.EpisodeType == EpisodeTypes.Episode)
+                .OrderBy(e => e.EpisodeNumber).ToList();
+            var ovaEpisodes = episodes
+                .Where(e => e.EpisodeType == EpisodeTypes.Ova || e.EpisodeType == EpisodeTypes.Oad)
+                .OrderBy(e => e.EpisodeNumber).ToList();
+            var specialEpisodes = episodes
+                .Where(e => e.EpisodeType == EpisodeTypes.Special)
+                .OrderBy(e => e.EpisodeNumber).ToList();
+            var ncopEpisodes = episodes
+                .Where(e => e.EpisodeType == EpisodeTypes.Ncop)
+                .OrderBy(e => e.EpisodeNumber).ToList();
+            var ncedEpisodes = episodes
+                .Where(e => e.EpisodeType == EpisodeTypes.Nced)
+                .OrderBy(e => e.EpisodeNumber).ToList();
+
+            // Regular episodes (always first, always expanded)
+            if (regularEpisodes.Any())
             {
-                var header = series.SeasonNumber == 0 ? "Specials / OVAs" : $"Season {series.SeasonNumber}";
                 SeasonGroups.Add(new SeasonGroup
                 {
-                    Header = header,
+                    Header = baseHeader,
+                    Episodes = regularEpisodes,
+                    IsExpanded = true
+                });
+            }
+            else if (!ovaEpisodes.Any() && !specialEpisodes.Any() && !ncopEpisodes.Any() && !ncedEpisodes.Any())
+            {
+                // No typed episodes at all — show the season row so it isn't invisible
+                SeasonGroups.Add(new SeasonGroup
+                {
+                    Header = baseHeader,
                     Episodes = episodes.OrderBy(e => e.EpisodeNumber).ToList(),
-                    IsExpanded = true // All seasons expanded by default
+                    IsExpanded = true
+                });
+                continue;
+            }
+
+            // OVAs / OADs (collapsed by default to reduce noise)
+            if (ovaEpisodes.Any())
+            {
+                SeasonGroups.Add(new SeasonGroup
+                {
+                    Header = series.SeasonNumber > 0 ? $"{baseHeader} — OVAs" : "OVAs / OADs",
+                    Episodes = ovaEpisodes,
+                    IsExpanded = false
+                });
+            }
+
+            // Specials (collapsed)
+            if (specialEpisodes.Any())
+            {
+                SeasonGroups.Add(new SeasonGroup
+                {
+                    Header = series.SeasonNumber > 0 ? $"{baseHeader} — Specials" : "Specials",
+                    Episodes = specialEpisodes,
+                    IsExpanded = false
+                });
+            }
+
+            // Clean Openings (collapsed)
+            if (ncopEpisodes.Any())
+            {
+                SeasonGroups.Add(new SeasonGroup
+                {
+                    Header = series.SeasonNumber > 0 ? $"{baseHeader} — Clean Openings" : "Clean Openings",
+                    Episodes = ncopEpisodes,
+                    IsExpanded = false
+                });
+            }
+
+            // Clean Endings (collapsed)
+            if (ncedEpisodes.Any())
+            {
+                SeasonGroups.Add(new SeasonGroup
+                {
+                    Header = series.SeasonNumber > 0 ? $"{baseHeader} — Clean Endings" : "Clean Endings",
+                    Episodes = ncedEpisodes,
+                    IsExpanded = false
                 });
             }
         }
@@ -196,8 +280,8 @@ public partial class ShowInfoPage : UserControl
                     refreshedAllEpisodes.AddRange(episodes.OrderBy(e => e.EpisodeNumber));
                 }
 
-                // Now call LoadSeriesData with the refreshed data to update UI
-                LoadSeriesData(refreshedSeriesGroup, refreshedAllEpisodes);
+                // Now call LoadSeriesDataAsync with the refreshed data to update UI
+                await LoadSeriesDataAsync(refreshedSeriesGroup, refreshedAllEpisodes);
 
                 // Notify the main window to refresh all pages (e.g. for library page title updates)
                 MetadataRefreshRequested?.Invoke();
@@ -205,7 +289,9 @@ public partial class ShowInfoPage : UserControl
         }
         catch (Exception ex)
         {
-            Logger.Log($"[ShowInfoPage] Metadata refresh failed: {ex.Message}", LogRegion.UI);
+            Logger.Log($"[ShowInfoPage] Metadata refresh FAILED: {ex.GetType().Name}: {ex.Message}");
+            Logger.LogError("Metadata refresh exception", ex);
+            MainWindow.ShowToast($"Refresh failed: {ex.Message}", true);
         }
         finally
         {

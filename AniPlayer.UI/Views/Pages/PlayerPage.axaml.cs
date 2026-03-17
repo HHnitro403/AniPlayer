@@ -12,6 +12,7 @@ using System.Runtime.InteropServices;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using Aniplayer.Core.Interfaces;
 using Aniplayer.Core.Models;
@@ -27,7 +28,7 @@ public partial class PlayerPage : UserControl
     private TaskCompletionSource? _mpvReady;
     private DispatcherTimer? _positionTimer;
     private bool _isUserSeeking;
-    private bool _isTransitioning;
+    private int _isTransitioning; // 0 = false, 1 = true (for Interlocked)
     private DispatcherTimer? _controlsHideTimer;
     private bool _mouseOverControls;
     private bool _isFullscreen;
@@ -36,6 +37,8 @@ public partial class PlayerPage : UserControl
     private Dictionary<int, (string? lang, string? title)> _audioTrackInfo = new();
     private Dictionary<int, (string? lang, string? title)> _subtitleTrackInfo = new();
     private bool _vsyncEnabled;
+    private int _audioDelayMs = 0;
+    private int _subDelayMs = 0;
 
     // State management
     private IWatchProgressService? _watchProgressService;
@@ -65,8 +68,23 @@ public partial class PlayerPage : UserControl
         AttachedToVisualTree += OnAttachedToVisualTree;
         DetachedFromVisualTree += OnDetachedFromVisualTree;
 
-        ProgressSlider.AddHandler(PointerPressedEvent, OnSliderPointerPressed, RoutingStrategies.Tunnel);
-        ProgressSlider.AddHandler(PointerReleasedEvent, OnSliderPointerReleased, RoutingStrategies.Tunnel);
+        PlayerControlsControl.Progress.AddHandler(PointerPressedEvent, OnSliderPointerPressed, RoutingStrategies.Tunnel);
+        PlayerControlsControl.Progress.AddHandler(PointerReleasedEvent, OnSliderPointerReleased, RoutingStrategies.Tunnel);
+
+        PlayerControlsControl.PlayPauseClicked += PlayPauseButton_Click;
+        PlayerControlsControl.StopClicked += StopButton_Click;
+        PlayerControlsControl.NextClicked += NextButton_Click;
+        PlayerControlsControl.RewindClicked += (s, e) => SeekBackButton_Click(s, null!);
+        PlayerControlsControl.FastForwardClicked += (s, e) => SeekForwardButton_Click(s, null!);
+        PlayerControlsControl.SpeedChanged += (s, speed) => SetOption("speed", speed.ToString("F2", CultureInfo.InvariantCulture));
+        PlayerControlsControl.AudioDelayChanged += (s, delay) => SetProperty("audio-delay", delay.ToString("F3", CultureInfo.InvariantCulture));
+        PlayerControlsControl.SubtitleDelayChanged += (s, delay) => SetProperty("sub-delay", delay.ToString("F3", CultureInfo.InvariantCulture));
+        PlayerControlsControl.FullscreenClicked += FullscreenButton_Click;
+        PlayerControlsControl.Volume.PropertyChanged += (s, e) =>
+        {
+            if (e.Property == Slider.ValueProperty && e.NewValue is double val)
+                AdjustVolumeTo((int)val);
+        };
 
         RootGrid.PointerMoved += OnPlayerPointerMoved;
 
@@ -74,6 +92,12 @@ public partial class PlayerPage : UserControl
         PlaceholderText.IsVisible = true;
         SkipOverlayButton.IsVisible = false;
         ControlsBar.IsVisible = true;
+    }
+
+    private void AdjustVolumeTo(int value)
+    {
+        if (_mpvHandle == IntPtr.Zero) return;
+        SetOption("volume", $"{value:F0}");
     }
 
     private async void OnAttachedToVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
@@ -120,7 +144,7 @@ public partial class PlayerPage : UserControl
             if (VideoHostControl.NativeHandle == IntPtr.Zero)
             {
                 Logger.Log("VideoHostControl.NativeHandle is Zero, retrying in 500ms");
-                StatusText.Text = "Waiting for video surface...";
+                PlayerControlsControl.SetNowPlaying("Loading", "Waiting for video surface...");
                 await Task.Delay(500);
                 Dispatcher.UIThread.Post(InitializeMpv);
                 return;
@@ -137,7 +161,7 @@ public partial class PlayerPage : UserControl
             if (_mpvHandle == IntPtr.Zero)
             {
                 Logger.LogError("Failed to create mpv instance");
-                StatusText.Text = "Error — mpv create failed";
+                PlayerControlsControl.SetNowPlaying("Error", "mpv create failed");
                 return;
             }
 
@@ -155,24 +179,24 @@ public partial class PlayerPage : UserControl
 
             int initResult = LibMpvInterop.mpv_initialize(_mpvHandle);
             Logger.Log($"mpv_initialize: {initResult}");
-            if (initResult < 0) { StatusText.Text = $"Error — init ({initResult})"; return; }
+            if (initResult < 0) { PlayerControlsControl.SetNowPlaying("Error", $"init ({initResult})"); return; }
 
             VideoHostControl.InitializeRenderer(_mpvHandle, _vsyncEnabled);
             if (VideoHostControl.Renderer == null || !VideoHostControl.Renderer.IsInitialized)
             {
-                StatusText.Text = "Error — renderer";
+                PlayerControlsControl.SetNowPlaying("Error", "renderer");
                 return;
             }
 
             _mpvInitialized = true;
-            StatusText.Text = "Ready";
+            PlayerControlsControl.SetNowPlaying("Ready", "Waiting for file...");
             Logger.Log("=== InitializeMpv END (SUCCESS) ===");
             _mpvReady?.TrySetResult();
         }
         catch (Exception ex)
         {
             Logger.LogError("InitializeMpv exception", ex);
-            StatusText.Text = $"Error — {ex.Message}";
+            PlayerControlsControl.SetNowPlaying("Error", ex.Message);
             _mpvReady?.TrySetResult();
         }
     }
@@ -185,6 +209,16 @@ public partial class PlayerPage : UserControl
             Encoding.UTF8.GetBytes(name + "\0"),
             Encoding.UTF8.GetBytes(value + "\0"));
         Logger.Log($"option {name}={value}: {r}");
+    }
+
+    private void SetProperty(string name, string value)
+    {
+        if (_mpvHandle == IntPtr.Zero) return;
+        int r = LibMpvInterop.mpv_set_property_string(
+            _mpvHandle,
+            Encoding.UTF8.GetBytes(name + "\0"),
+            Encoding.UTF8.GetBytes(value + "\0"));
+        Logger.Log($"property {name}={value}: {r}");
     }
 
     public async Task LoadPlaylistAsync(IReadOnlyList<Episode> playlist, int startIndex)
@@ -207,35 +241,35 @@ public partial class PlayerPage : UserControl
     {
         if (_mpvHandle == IntPtr.Zero || !_mpvInitialized || _currentEpisode == null) return;
         SetOption("pause", "yes");
-        PlayPauseButton.Content = "▶ Play";
-        StatusText.Text = "Paused";
+        PlayerControlsControl.SetPlayState(false);
+        PlayerControlsControl.SetNowPlaying(_currentEpisode?.DisplayName ?? "No file loaded", "Paused");
     }
 
-    private void PlayPauseButton_Click(object? sender, RoutedEventArgs e)
+    private void PlayPauseButton_Click(object? sender, EventArgs e)
     {
         if (_mpvHandle == IntPtr.Zero || !_mpvInitialized) return;
 
         var paused = GetMpvPropertyString("pause") == "yes";
         SetOption("pause", paused ? "no" : "yes");
 
-        PlayPauseButton.Content = paused ? "⏸ Pause" : "▶ Play";
-        StatusText.Text = paused ? "Playing" : "Paused";
+        PlayerControlsControl.SetPlayState(paused); // if it was paused, it's now playing
+        PlayerControlsControl.SetNowPlaying(_currentEpisode?.DisplayName ?? "No file loaded", paused ? "Playing" : "Paused");
     }
 
-    private async void StopButton_Click(object? sender, RoutedEventArgs e)
+    private async void StopButton_Click(object? sender, EventArgs e)
     {
         await CleanupCurrentFileAsync();
         PlaybackStopped?.Invoke();
     }
 
-    private async void NextButton_Click(object? sender, RoutedEventArgs e)
+    private async void NextButton_Click(object? sender, EventArgs e)
     {
         if (_currentEpisode == null) return;
         await SaveCurrentProgressAsync(markCompleted: true);
         await PlayNextInPlaylistAsync();
     }
 
-    private void FullscreenButton_Click(object? sender, RoutedEventArgs e) => FullscreenToggleRequested?.Invoke();
+    private void FullscreenButton_Click(object? sender, EventArgs e) => FullscreenToggleRequested?.Invoke();
 
     private void SeekBackButton_Click(object? sender, RoutedEventArgs e)
     {
@@ -254,7 +288,7 @@ public partial class PlayerPage : UserControl
 
         switch (key)
         {
-            case Key.Space: PlayPauseButton_Click(null, null!); return true;
+            case Key.Space: PlayPauseButton_Click(null, EventArgs.Empty); return true;
             case Key.Left: SeekBackButton_Click(null, null!); return true;  // Trigger button event
             case Key.Right: SeekForwardButton_Click(null, null!); return true;  // Trigger button event
             case Key.Up: AdjustVolume(10); return true;
@@ -262,10 +296,30 @@ public partial class PlayerPage : UserControl
             case Key.A: CycleAudioTrack(); return true;
             case Key.S: CycleSubtitleTrack(); return true;
             case Key.F: FullscreenToggleRequested?.Invoke(); return true;
-            case Key.N: NextButton_Click(null, null!); return true;
+            case Key.N: NextButton_Click(null, EventArgs.Empty); return true;
             case Key.M: ToggleMute(); return true;
+            case Key.G: AdjustSubtitleDelay(-50); return true;
+            case Key.H: AdjustSubtitleDelay(50); return true;
+            case Key.J: AdjustAudioDelay(-50); return true;
+            case Key.K: AdjustAudioDelay(50); return true;
             default: return false;
         }
+    }
+
+    private void AdjustAudioDelay(int delta)
+    {
+        _audioDelayMs += delta;
+        PlayerControlsControl.SetAudioDelay(_audioDelayMs);
+        SetProperty("audio-delay", (_audioDelayMs / 1000.0).ToString("F3", CultureInfo.InvariantCulture));
+        PlayerControlsControl.SetNowPlaying(_currentEpisode?.DisplayName ?? "No file loaded", $"Audio Delay: {_audioDelayMs}ms");
+    }
+
+    private void AdjustSubtitleDelay(int delta)
+    {
+        _subDelayMs += delta;
+        PlayerControlsControl.SetSubtitleDelay(_subDelayMs);
+        SetProperty("sub-delay", (_subDelayMs / 1000.0).ToString("F3", CultureInfo.InvariantCulture));
+        PlayerControlsControl.SetNowPlaying(_currentEpisode?.DisplayName ?? "No file loaded", $"Subtitle Delay: {_subDelayMs}ms");
     }
 
     private void SeekRelative(double seconds)
@@ -311,9 +365,6 @@ public partial class PlayerPage : UserControl
 
     private async Task ChangeToEpisodeAsync(Episode newEpisode, bool isInitialLoad = false)
     {
-        if (_isTransitioning) return;
-        _isTransitioning = true;
-
         if (!isInitialLoad && _currentEpisode != null && _currentEpisode.Id != newEpisode.Id)
         {
             Logger.Log($"[State] Saving progress for old episode {_currentEpisode.Id} before changing.");
@@ -327,8 +378,7 @@ public partial class PlayerPage : UserControl
 
         await LoadFileIntoMpvAsync(newEpisode.FilePath);
 
-        _isTransitioning = false;
-        NextButton.IsEnabled = _playlistIndex < _playlist.Count - 1;
+        PlayerControlsControl.SetNextEnabled(_playlistIndex < _playlist.Count - 1);
     }
 
     private async Task LoadFileIntoMpvAsync(string filePath)
@@ -344,7 +394,7 @@ public partial class PlayerPage : UserControl
         if (!_mpvInitialized || _mpvHandle == IntPtr.Zero || !File.Exists(filePath))
         {
             Logger.LogError($"Pre-flight check failed for '{filePath}'");
-            StatusText.Text = "Error — pre-flight check failed";
+            PlayerControlsControl.SetNowPlaying("Error", "pre-flight check failed");
             return;
         }
 
@@ -371,15 +421,30 @@ public partial class PlayerPage : UserControl
         if (_currentEpisode != null && !string.IsNullOrEmpty(_currentEpisode.ExternalSubtitlePath) && File.Exists(_currentEpisode.ExternalSubtitlePath))
         {
             Logger.Log($"Loading external subtitle: {_currentEpisode.ExternalSubtitlePath}");
-            SetOption("sub-file", _currentEpisode.ExternalSubtitlePath);
+            // Fix: Use 'sub-add' command after delay instead of 'sub-file' option
+            // 'sub-file' is an option for the next file, but we just started loading.
+            _ = Task.Delay(500).ContinueWith(_ =>
+            {
+                if (_mpvHandle != IntPtr.Zero)
+                {
+                    var subCmd = new[]
+                    {
+                        Marshal.StringToHGlobalAnsi("sub-add"),
+                        Marshal.StringToHGlobalAnsi(_currentEpisode.ExternalSubtitlePath),
+                        Marshal.StringToHGlobalAnsi("select"), // auto-select it
+                        IntPtr.Zero
+                    };
+                    LibMpvInterop.mpv_command(_mpvHandle, subCmd);
+                    foreach (var ptr in subCmd) if (ptr != IntPtr.Zero) Marshal.FreeHGlobal(ptr);
+                }
+            }, TaskScheduler.FromCurrentSynchronizationContext());
         }
 
         VideoHostControl.Renderer?.Render();
 
         PlaceholderText.IsVisible = false;
-        NowPlayingText.Text = Path.GetFileName(filePath);
-        StatusText.Text = "Playing";
-        PlayPauseButton.Content = "⏸ Pause";
+        PlayerControlsControl.SetNowPlaying(Path.GetFileName(filePath), "Playing");
+        PlayerControlsControl.SetPlayState(true);
 
         StartPositionTimer();
 
@@ -409,12 +474,32 @@ public partial class PlayerPage : UserControl
 
     private async Task PlayNextInPlaylistAsync()
     {
-        if (_isTransitioning || _playlistIndex >= _playlist.Count - 1) return;
+        // Use Interlocked.CompareExchange to atomically check and set the flag
+        // This prevents race condition if timer fires multiple times before transition completes
+        if (Interlocked.CompareExchange(ref _isTransitioning, 1, 0) != 0)
+        {
+            Logger.Log("PlayNextInPlaylistAsync: transition already in progress, skipping");
+            return;
+        }
 
-        var nextIndex = _playlistIndex + 1;
-        Logger.Log($"Playing next: index {nextIndex}/{_playlist.Count - 1}");
+        try
+        {
+            if (_playlistIndex >= _playlist.Count - 1)
+            {
+                Logger.Log("PlayNextInPlaylistAsync: already at last episode");
+                return;
+            }
 
-        await ChangeToEpisodeAsync(_playlist[nextIndex]);
+            var nextIndex = _playlistIndex + 1;
+            Logger.Log($"Playing next: index {nextIndex}/{_playlist.Count - 1}");
+
+            await ChangeToEpisodeAsync(_playlist[nextIndex]);
+        }
+        finally
+        {
+            // Always reset the flag, even if an exception occurs
+            Interlocked.Exchange(ref _isTransitioning, 0);
+        }
     }
 
     private async Task AnalyzeFileChapters()
@@ -479,6 +564,7 @@ public partial class PlayerPage : UserControl
             }
 
             var pref = await _libraryService.GetSeriesTrackPreferenceAsync(_currentEpisode.SeriesId);
+            var selectedAudioId = 0L;
             if (pref != null)
             {
                 var match = MatchPreferredAudioTrack(audioTracks, pref.PreferredAudioLanguage, pref.PreferredAudioTitle, pref.PreferredAudioTrackId);
@@ -486,11 +572,15 @@ public partial class PlayerPage : UserControl
                 {
                     Logger.Log($"Auto-selecting preferred audio track {match.id}");
                     SetOption("aid", $"{match.id}");
+                    selectedAudioId = match.id; // Use known value — mpv may not reflect it yet
                 }
             }
-
-            var aidStr = GetMpvPropertyString("aid");
-            if (!long.TryParse(aidStr, out var currentAid)) currentAid = 0;
+            // Only query mpv for current track if no preference was applied
+            if (selectedAudioId == 0)
+            {
+                var aidStr = GetMpvPropertyString("aid");
+                if (!long.TryParse(aidStr, out selectedAudioId)) selectedAudioId = 0;
+            }
 
             foreach (var (id, label, _, _) in audioTracks)
             {
@@ -506,7 +596,7 @@ public partial class PlayerPage : UserControl
                     Foreground = new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.Parse("#D0D0E0")),
                     CornerRadius = new CornerRadius(4)
                 };
-                if (id == currentAid) btn.FontWeight = Avalonia.Media.FontWeight.Bold;
+                if (id == selectedAudioId) btn.FontWeight = Avalonia.Media.FontWeight.Bold;
                 btn.Click += (_, _) => { if (btn.Tag is int tid) SwitchAudioTrack(tid); };
                 AudioTracksPanel.Children.Add(btn);
             }
@@ -518,20 +608,23 @@ public partial class PlayerPage : UserControl
         List<(int id, string label, string? lang, string? title)> tracks,
         string? prefLang, string? prefTitle, int? prefTrackId = null)
     {
-        if (prefTrackId.HasValue && prefTrackId.Value > 0)
-        {
-            var m = tracks.FirstOrDefault(t => t.id == prefTrackId.Value);
-            if (m.id > 0) return (m.id, m.lang, m.title);
-        }
+        // 1. Title first — most specific, consistent across all episodes in a series
         if (!string.IsNullOrEmpty(prefTitle))
         {
             var m = tracks.FirstOrDefault(t => string.Equals(t.title, prefTitle, StringComparison.OrdinalIgnoreCase));
             if (m.title != null) return (m.id, m.lang, m.title);
         }
+        // 2. Language — reliable across episodes regardless of encode differences
         if (!string.IsNullOrEmpty(prefLang))
         {
             var m = tracks.FirstOrDefault(t => string.Equals(t.lang, prefLang, StringComparison.OrdinalIgnoreCase));
             if (m.lang != null) return (m.id, m.lang, m.title);
+        }
+        // 3. Track ID last — IDs can vary between episodes/encodes, use only as fallback
+        if (prefTrackId.HasValue && prefTrackId.Value > 0)
+        {
+            var m = tracks.FirstOrDefault(t => t.id == prefTrackId.Value);
+            if (m.id > 0) return (m.id, m.lang, m.title);
         }
         return default;
     }
@@ -576,7 +669,7 @@ public partial class PlayerPage : UserControl
             var label = !string.IsNullOrEmpty(info.lang) && !string.IsNullOrEmpty(info.title)
                 ? $"{info.lang} — {info.title}"
                 : info.title ?? info.lang ?? $"Track {trackIds[nextIndex]}";
-            StatusText.Text = $"Audio: {label}";
+            PlayerControlsControl.SetNowPlaying(_currentEpisode?.DisplayName ?? "No file loaded", $"Audio: {label}");
         }
     }
 
@@ -585,7 +678,7 @@ public partial class PlayerPage : UserControl
         if (_mpvHandle == IntPtr.Zero) return;
         var muted = GetMpvPropertyString("mute") == "yes";
         SetOption("mute", muted ? "no" : "yes");
-        StatusText.Text = muted ? "Unmuted" : "Muted";
+        PlayerControlsControl.SetNowPlaying(_currentEpisode?.DisplayName ?? "No file loaded", muted ? "Unmuted" : "Muted");
     }
 
     private async Task UpdateSubtitleTracksAsync()
@@ -622,22 +715,34 @@ public partial class PlayerPage : UserControl
             }
 
             var pref = await _libraryService.GetSeriesTrackPreferenceAsync(_currentEpisode.SeriesId);
-            if (pref != null && !string.IsNullOrEmpty(pref.PreferredSubtitleLanguage))
+            var selectedSubId = -1; // -1 = not set by preference; 0 = "None" explicitly chosen
+            if (pref != null && (!string.IsNullOrEmpty(pref.PreferredSubtitleLanguage) || !string.IsNullOrEmpty(pref.PreferredSubtitleName)))
             {
-                var match = MatchPreferredSubtitleTrack(subtitleTracks, pref.PreferredSubtitleLanguage, pref.PreferredSubtitleName);
-                if (match.id > 0)
+                if (pref.PreferredSubtitleLanguage == "none")
                 {
-                    Logger.Log($"Auto-selecting preferred subtitle track {match.id}");
-                    SetOption("sid", $"{match.id}");
+                    // User previously chose "None" — disable subtitles
+                    Logger.Log("Auto-disabling subtitles per saved preference");
+                    SetOption("sid", "no");
+                    selectedSubId = 0;
+                }
+                else
+                {
+                    var match = MatchPreferredSubtitleTrack(subtitleTracks, pref.PreferredSubtitleLanguage, pref.PreferredSubtitleName);
+                    if (match.id > 0)
+                    {
+                        Logger.Log($"Auto-selecting preferred subtitle track {match.id}");
+                        SetOption("sid", $"{match.id}");
+                        selectedSubId = match.id; // Use known value — mpv may not reflect it yet
+                    }
                 }
             }
-
-            var sidStr = GetMpvPropertyString("sid");
-            var currentSid = 0;
-            if (!string.IsNullOrEmpty(sidStr) && sidStr != "no")
+            // Only query mpv for current track if no preference was applied
+            if (selectedSubId == -1)
             {
-                if (long.TryParse(sidStr, out var temp))
-                    currentSid = (int)temp;
+                var sidStr = GetMpvPropertyString("sid");
+                selectedSubId = 0;
+                if (!string.IsNullOrEmpty(sidStr) && sidStr != "no")
+                    int.TryParse(sidStr, out selectedSubId);
             }
 
             foreach (var (id, label, _, _) in subtitleTracks)
@@ -654,7 +759,7 @@ public partial class PlayerPage : UserControl
                     Foreground = new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.Parse("#D0D0E0")),
                     CornerRadius = new CornerRadius(4)
                 };
-                if (id == currentSid) btn.FontWeight = Avalonia.Media.FontWeight.Bold;
+                if (id == selectedSubId) btn.FontWeight = Avalonia.Media.FontWeight.Bold;
                 btn.Click += (_, _) => { if (btn.Tag is int tid) SwitchSubtitleTrack(tid); };
                 SubtitleTracksPanel.Children.Add(btn);
             }
@@ -686,10 +791,16 @@ public partial class PlayerPage : UserControl
         if (trackId == 0)
         {
             SetOption("sid", "no");
+            _ = _libraryService.UpsertSeriesSubtitlePreferenceAsync(_currentEpisode.SeriesId, "none", null);
         }
         else
         {
             SetOption("sid", $"{trackId}");
+            if (_subtitleTrackInfo.TryGetValue(trackId, out var info))
+            {
+                var lang = info.lang ?? "";
+                _ = _libraryService.UpsertSeriesSubtitlePreferenceAsync(_currentEpisode.SeriesId, lang, info.title);
+            }
         }
 
         foreach (var child in SubtitleTracksPanel.Children)
@@ -698,12 +809,6 @@ public partial class PlayerPage : UserControl
                 btn.FontWeight = (btn.Tag is int id && id == trackId)
                     ? Avalonia.Media.FontWeight.Bold
                     : Avalonia.Media.FontWeight.Normal;
-        }
-
-        if (trackId > 0 && _subtitleTrackInfo.TryGetValue(trackId, out var info))
-        {
-            var lang = info.lang ?? "";
-            _ = _libraryService.UpsertSeriesSubtitlePreferenceAsync(_currentEpisode.SeriesId, lang, info.title);
         }
     }
 
@@ -727,14 +832,14 @@ public partial class PlayerPage : UserControl
         // Show brief status
         if (nextId == 0)
         {
-            StatusText.Text = "Subtitles: Off";
+            PlayerControlsControl.SetNowPlaying(_currentEpisode?.DisplayName ?? "No file loaded", "Subtitles: Off");
         }
         else if (_subtitleTrackInfo.TryGetValue(nextId, out var info))
         {
             var label = !string.IsNullOrEmpty(info.lang) && !string.IsNullOrEmpty(info.title)
                 ? $"{info.lang} — {info.title}"
                 : info.title ?? info.lang ?? $"Track {nextId}";
-            StatusText.Text = $"Subtitle: {label}";
+            PlayerControlsControl.SetNowPlaying(_currentEpisode?.DisplayName ?? "No file loaded", $"Subtitle: {label}");
         }
     }
 
@@ -793,7 +898,7 @@ public partial class PlayerPage : UserControl
 
             if (_mpvHandle == IntPtr.Zero) return;
 
-            if (eofReached == "yes" && !_isTransitioning && _playlistIndex < _playlist.Count - 1)
+            if (eofReached == "yes" && _isTransitioning == 0 && _playlistIndex < _playlist.Count - 1)
             {
                 Logger.Log("EOF reached — auto-playing next episode");
                 await PlayNextInPlaylistAsync();
@@ -805,10 +910,9 @@ public partial class PlayerPage : UserControl
              double.TryParse(durStr, NumberStyles.Any, CultureInfo.InvariantCulture, out var dur) &&
              dur > 0)
             {
-                ProgressSlider.Maximum = dur;
-                ProgressSlider.Value = pos;
-                TimeCurrentText.Text = FormatTime(pos);
-                TimeTotalText.Text = FormatTime(dur);
+                PlayerControlsControl.Progress.Maximum = dur;
+                PlayerControlsControl.Progress.Value = pos;
+                PlayerControlsControl.SetTime(FormatTime(pos), FormatTime(dur));
 
                 await SaveCurrentProgressAsync(force: false);
             }
@@ -823,7 +927,7 @@ public partial class PlayerPage : UserControl
     {
         if (_currentEpisode == null) return;
 
-        var now = ProgressSlider.Value;
+        var now = PlayerControlsControl.Progress.Value;
 
         if (_currentEpisode.HasIntro && now >= _currentEpisode.IntroStart && now < _currentEpisode.IntroEnd)
         {
@@ -855,7 +959,7 @@ public partial class PlayerPage : UserControl
 
         if (target == -1.0)
         {
-            NextButton_Click(sender, e);
+            NextButton_Click(sender, EventArgs.Empty);
         }
         else
         {
@@ -917,7 +1021,7 @@ public partial class PlayerPage : UserControl
         if (_isUserSeeking)
         {
             _isUserSeeking = false;
-            SeekAbsolute(ProgressSlider.Value);
+            SeekAbsolute(PlayerControlsControl.Progress.Value);
         }
     }
 
@@ -1048,19 +1152,29 @@ public partial class PlayerPage : UserControl
         }
 
         if (_mpvHandle != IntPtr.Zero)
-            try { SetOption("command", "stop"); } catch { }
+        {
+            try
+            {
+                var stopCmd = new[] { Marshal.StringToHGlobalAnsi("stop"), IntPtr.Zero };
+                LibMpvInterop.mpv_command(_mpvHandle, stopCmd);
+                Marshal.FreeHGlobal(stopCmd[0]);
+            }
+            catch { }
+        }
 
         _currentEpisode = null;
-        NowPlayingText.Text = "No file loaded";
-        StatusText.Text = "Stopped";
+        _audioDelayMs = 0;
+        _subDelayMs = 0;
+        PlayerControlsControl.SetAudioDelay(0);
+        PlayerControlsControl.SetSubtitleDelay(0);
+        PlayerControlsControl.SetNowPlaying("No file loaded", "Stopped");
         AudioTracksPanel.Children.Clear();
         SubtitleTracksPanel.Children.Clear();
         PlaceholderText.IsVisible = true;
-        PlayPauseButton.Content = "▶ Play";
-        ProgressSlider.Value = 0;
-        ProgressSlider.Maximum = 100;
-        TimeCurrentText.Text = "0:00";
-        TimeTotalText.Text = "0:00";
+        PlayerControlsControl.SetPlayState(false);
+        PlayerControlsControl.Progress.Value = 0;
+        PlayerControlsControl.Progress.Maximum = 100;
+        PlayerControlsControl.SetTime("0:00", "0:00");
     }
 
     private void PollMpvEvents()
