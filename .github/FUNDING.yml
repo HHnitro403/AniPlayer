@@ -1,12 +1,1 @@
 github: HHnitro403
-```
-
-5. Commit it
-
-That's it. The **Sponsor** button appears on the repo sidebar automatically within a few minutes.
-
-## If the `.github` folder doesn't exist
-
-You can create it inline — when creating a new file, just type the path as:
-```
-.github/FUNDING.yml
