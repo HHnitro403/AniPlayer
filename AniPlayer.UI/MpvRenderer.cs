@@ -9,7 +9,7 @@ namespace AniPlayer.UI
     /// Handles libmpv render API integration with OpenGL on a dedicated thread.
     /// This prevents VSync from blocking the UI thread.
     /// </summary>
-    public class MpvRenderer : IDisposable
+    public class MpvRenderer : IMpvRenderer
     {
         private IntPtr _mpvHandle;
         private IntPtr _renderContext;

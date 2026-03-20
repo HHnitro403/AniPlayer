@@ -16,6 +16,7 @@ namespace AniPlayer.UI
 
         public override void Initialize()
         {
+            NativeLibraryResolver.Register();
             AvaloniaXamlLoader.Load(this);
         }
 

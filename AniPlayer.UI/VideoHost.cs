@@ -11,11 +11,11 @@ namespace AniPlayer.UI
     public class VideoHost : NativeControlHost
     {
         private IntPtr _nativeHandle;
-        private MpvRenderer? _renderer;
+        private IMpvRenderer? _renderer;
         private int _lastArrangeWidth, _lastArrangeHeight;
 
         public IntPtr NativeHandle => _nativeHandle;
-        public MpvRenderer? Renderer => _renderer;
+        public IMpvRenderer? Renderer => _renderer;
 
         public VideoHost()
         {
@@ -34,26 +34,32 @@ namespace AniPlayer.UI
 
             try
             {
-                _renderer = new MpvRenderer(mpvHandle, _nativeHandle);
-
-                // Get current size
-                var size = Bounds.Size;
-                int width = Math.Max((int)size.Width, 1);
+                var size   = Bounds.Size;
+                int width  = Math.Max((int)size.Width,  1);
                 int height = Math.Max((int)size.Height, 1);
 
                 Logger.Log($"Initializing renderer with size: {width}x{height}");
-                bool success = _renderer.Initialize(width, height, vsync);
 
-                if (!success)
+                bool success;
+                if (OperatingSystem.IsWindows())
                 {
-                    Logger.LogError("Renderer initialization failed");
-                    _renderer?.Dispose();
-                    _renderer = null;
+                    var win = new MpvRenderer(mpvHandle, _nativeHandle);
+                    success = win.Initialize(width, height, vsync);
+                    if (!success) { win.Dispose(); return; }
+                    _renderer = win;
+                }
+                else if (OperatingSystem.IsLinux())
+                {
+                    var lnx = new LinuxMpvRenderer(mpvHandle, _nativeHandle);
+                    success = lnx.Initialize(width, height, vsync);
+                    if (!success) { lnx.Dispose(); return; }
+                    _renderer = lnx;
+                }
+                else
+                {
+                    Logger.LogError("InitializeRenderer: unsupported platform");
                     return;
                 }
-
-                // Subscribe to render events
-                
 
                 Logger.Log("Renderer initialized successfully");
             }
